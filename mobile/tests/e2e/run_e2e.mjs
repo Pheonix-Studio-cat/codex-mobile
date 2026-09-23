@@ -383,6 +383,76 @@ async function main() {
     );
     await stranger.close();
 
+    // iPad: landscape keeps the thread list open, portrait centres one
+    // column and slides the list in; a hardware keyboard sends with Enter.
+    for (const [deviceName, sidebar] of [
+      ["iPad Pro 11 landscape", true],
+      ["iPad Pro 11", false],
+    ]) {
+      const tablet = await browser.newContext({ ...devices[deviceName] });
+      const pad = await tablet.newPage();
+      const padErrors = [];
+      pad.on("pageerror", (error) => padErrors.push(String(error)));
+      await pad.goto(one.url);
+      await pad.waitForSelector("#view-chat:not([hidden])", { timeout: 30000 });
+      const layout = await pad.evaluate(() => {
+        const box = (id) => document.getElementById(id).getBoundingClientRect();
+        return {
+          width: window.innerWidth,
+          drawerVisible: !document.getElementById("drawer").hidden,
+          menuVisible:
+            getComputedStyle(document.getElementById("menu-button")).display !==
+            "none",
+          messages: box("messages").width,
+          messagesLeft: box("messages").left,
+          main: box("view-chat"),
+          hint: getComputedStyle(document.querySelector(".kbd-hint")).display,
+        };
+      });
+      check(
+        layout.drawerVisible === sidebar && layout.menuVisible === !sidebar,
+        `${deviceName} (${layout.width}px): thread list ${sidebar ? "stays open" : "slides in"}`,
+      );
+      check(
+        layout.messages <= 860,
+        `${deviceName}: the conversation is a reading column (${Math.round(layout.messages)}px)`,
+      );
+      const centred =
+        Math.abs(
+          layout.messagesLeft -
+            layout.main.left -
+            (layout.main.width - layout.messages) / 2,
+        ) < 2;
+      check(centred, `${deviceName}: the column is centred`);
+      check(
+        layout.hint !== "none",
+        `${deviceName}: the keyboard shortcuts are shown`,
+      );
+
+      // Enter sends (no on-screen keyboard is covering the page).
+      await pad.keyboard.press("Meta+k");
+      await pad.fill("#prompt", "From the iPad keyboard.");
+      await pad.press("#prompt", "Enter");
+      await pad.waitForSelector(".approval", { timeout: 30000 });
+      check(true, `${deviceName}: Enter sends with a hardware keyboard`);
+      await shot(pad, "09-" + deviceName.replace(/\s+/g, "-").toLowerCase());
+      await pad.click(".approval button.primary");
+      await pad.waitForFunction(
+        () =>
+          Array.from(document.querySelectorAll(".msg.agent")).some((el) =>
+            /step two/.test(el.textContent),
+          ),
+        null,
+        { timeout: 30000 },
+      );
+      check(
+        padErrors.length === 0,
+        `${deviceName}: no page errors` +
+          (padErrors.length ? ": " + padErrors.join(" / ") : ""),
+      );
+      await tablet.close();
+    }
+
     // Without the token nothing works.
     const denied = await fetch("http://127.0.0.1:18901/api/rpc", {
       method: "POST",

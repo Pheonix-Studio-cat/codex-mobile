@@ -1244,7 +1244,9 @@
     document.title = (text ? text + " · " : "") + "Codex Mobile";
   }
 
-  const wideLayout = window.matchMedia("(min-width: 900px)");
+  // The same width as the permanent sidebar in app.css: iPad landscape and
+  // the 12.9" iPad in portrait.
+  const wideLayout = window.matchMedia("(min-width: 1000px)");
 
   function updateDrawerForLayout() {
     const inApp = state.view === "chat" || state.view === "security";
@@ -1448,7 +1450,43 @@
     $("send").hidden = !!state.activeTurnId && !prompt.value.trim();
   }
 
+  // There is no API that says "a hardware keyboard is attached". What can be
+  // seen: the on-screen keyboard takes a large part of the visual viewport,
+  // an attached keyboard does not (iPadOS shows only a slim shortcut bar).
+  // A fine pointer (trackpad, mouse) also means a desk setup.
+  function hardwareKeyboardLikely() {
+    if (window.matchMedia("(any-pointer: fine)").matches) return true;
+    const viewport = window.visualViewport;
+    if (!viewport) return false;
+    return viewport.height > window.innerHeight * 0.8;
+  }
+
+  // Shortcuts for an iPad with keyboard, listed under the composer. Only
+  // combinations Safari does not already use: Cmd+/ and Cmd+Shift+L are its
+  // own (status bar, sidebar).
+  function onShortcut(event) {
+    const mod = event.metaKey || event.ctrlKey;
+    if (event.key === "Escape") {
+      if (!$("drawer").hidden && !wideLayout.matches) {
+        closeDrawer();
+        event.preventDefault();
+      }
+      return;
+    }
+    if (!mod || !state.token) return;
+    if (event.key === ".") {
+      // Cmd+. stops, as everywhere on Apple platforms.
+      event.preventDefault();
+      interrupt();
+    } else if (event.key.toLowerCase() === "k" && !event.shiftKey) {
+      event.preventDefault();
+      newThreadView();
+      $("prompt").focus();
+    }
+  }
+
   function bind() {
+    document.addEventListener("keydown", onShortcut);
     $("pair-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const token = $("pair-token").value.trim();
@@ -1511,14 +1549,11 @@
     const prompt = $("prompt");
     prompt.addEventListener("input", autoGrow);
     prompt.addEventListener("keydown", (event) => {
-      // Enter sends on a hardware keyboard; on a phone the return key makes a
-      // new line and the send button sends.
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey &&
-        !event.isComposing &&
-        window.matchMedia("(pointer: fine)").matches
-      ) {
+      if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+      // Cmd/Ctrl+Enter always sends. Plain Enter sends when a hardware
+      // keyboard is attached (iPad with Magic or Smart Keyboard); with the
+      // on-screen keyboard, return makes a new line and the button sends.
+      if (event.metaKey || event.ctrlKey || hardwareKeyboardLikely()) {
         event.preventDefault();
         $("composer").requestSubmit();
       }

@@ -52,6 +52,9 @@ STATIC_FILES = {
     "/markdown.js": ("markdown.js", "text/javascript; charset=utf-8"),
     "/manifest.webmanifest": ("manifest.webmanifest", "application/manifest+json"),
     "/icon.svg": ("icon.svg", "image/svg+xml"),
+    "/icon-180.png": ("icon-180.png", "image/png"),
+    "/icon-192.png": ("icon-192.png", "image/png"),
+    "/icon-512.png": ("icon-512.png", "image/png"),
 }
 
 # The phone may call these app-server methods and nothing else. Everything the

@@ -34,7 +34,8 @@
     <title>Codex Mobile</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="icon.svg" />
+    <!-- iPadOS and iOS ignore SVG here; without a PNG the home screen shows a screenshot. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png" />
     <link rel="stylesheet" href="app.css" />
     <script src="markdown.js" defer></script>
     <script src="app.js" defer></script>
@@ -292,6 +293,9 @@
           </svg>
         </button>
       </form>
+      <p class="kbd-hint muted">
+        ⌘↩ send · ⌘. stop · ⌘K new thread · esc close list
+      </p>
     </footer>
 
     <div id="toast" class="toast" role="status" hidden></div>

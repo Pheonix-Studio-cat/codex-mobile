@@ -315,7 +315,10 @@ class BridgeTest(unittest.TestCase):
 
     def test_every_file_the_page_references_is_served(self):
         html = (REPO / "mobile/web/index.html").read_text()
-        referenced = set(re.findall(r'(?:src|href)="([a-z.]+\.(?:js|css|svg|webmanifest))"', html))
+        referenced = set(re.findall(r'(?:src|href)="([a-z0-9.-]+\.(?:js|css|svg|png|webmanifest))"', html))
+        manifest = json.loads((REPO / "mobile/web/manifest.webmanifest").read_text())
+        referenced |= {icon["src"] for icon in manifest["icons"]}
+        self.assertIn("icon-180.png", referenced, "iPadOS needs a PNG apple-touch-icon")
         self.assertTrue(referenced)
         for name in referenced:
             self.assertIn("/" + name, bridge_module.STATIC_FILES, name)
