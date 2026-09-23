@@ -910,6 +910,11 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"clone Chinook Security at the pinned commit {CHINOOK_COMMIT[:12]} into the cache first",
     )
     parser.add_argument(
+        "--fetch-chinook-only",
+        action="store_true",
+        help="fetch Chinook Security (as --fetch-chinook) and exit",
+    )
+    parser.add_argument(
         "--allow-origin",
         action="append",
         default=[],
@@ -933,13 +938,36 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def read_token(path: Optional[str]) -> str:
+TOKEN_ENV = "CODEX_MOBILE_TOKEN"
+
+
+def read_token(path: Optional[str], env: Optional[dict] = None) -> str:
+    """The pairing token: from --token-file, else from $CODEX_MOBILE_TOKEN (a
+    Codespaces secret the owner sets once in the GitHub settings, so no
+    terminal is ever needed), else a fresh random one."""
+    env = os.environ if env is None else env
+    token = ""
     if path:
         token = Path(path).read_text(encoding="utf-8").strip()
-        if len(token) < 24:
-            raise SystemExit("the pairing token must be at least 24 characters long")
-        return token
-    return secrets.token_urlsafe(32)
+    elif env.get(TOKEN_ENV):
+        token = env[TOKEN_ENV].strip()
+    else:
+        return secrets.token_urlsafe(32)
+    if len(token) < 24:
+        raise SystemExit("the pairing token must be at least 24 characters long")
+    return token
+
+
+def codespace_url(port: int, env: Optional[dict] = None) -> str:
+    """The address GitHub Codespaces forwards this port to, or "" outside a
+    codespace. Documented variables: CODESPACE_NAME and
+    GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN."""
+    env = os.environ if env is None else env
+    name = env.get("CODESPACE_NAME", "")
+    domain = env.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN", "")
+    if not name or not domain:
+        return ""
+    return f"https://{name}-{port}.{domain}"
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -948,10 +976,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not workspace.is_dir():
         raise SystemExit(f"workspace is not a directory: {workspace}")
 
-    if args.fetch_chinook:
+    if args.fetch_chinook or args.fetch_chinook_only:
         target = Path(args.chinook).resolve() if args.chinook else default_chinook_dir()
         log(f"fetching Chinook Security {CHINOOK_COMMIT[:12]} into {target}")
         fetch_chinook(target)
+        if args.fetch_chinook_only:
+            return 0
 
     token = read_token(args.token_file)
     hub = EventHub()
@@ -961,6 +991,12 @@ def main(argv: Optional[List[str]] = None) -> int:
     origins = list(args.allow_origin)
     if not args.no_hosted_ui:
         origins.append(HOSTED_UI_ORIGIN)
+    # In a codespace the browser reaches the bridge through GitHub's port
+    # forwarding; the Host header the bridge sees need not match that
+    # address, so the forwarded origin is listed explicitly.
+    forwarded = codespace_url(args.port)
+    if forwarded:
+        origins.append(forwarded)
     bridge = Bridge(app_server, hub, scanner, token, workspace, origins)
 
     server = ThreadingHTTPServer((args.host, args.port), make_handler(bridge))
@@ -974,13 +1010,23 @@ def main(argv: Optional[List[str]] = None) -> int:
     print("", file=sys.stderr)
     print("  Codex Mobile is running.", file=sys.stderr)
     local_url = f"http://{shown_host}:{port}"
-    print(f"  Open here:           {local_url}/#token={token}", file=sys.stderr)
-    if not args.no_hosted_ui:
-        bridge_url = (args.public_url or local_url).rstrip("/")
-        print(f"  Or the hosted app:   {HOSTED_UI_URL}#bridge={bridge_url}&token={token}", file=sys.stderr)
-        if not args.public_url:
-            print("                       (from another device this needs --public-url https://...)", file=sys.stderr)
-    print("  The part after # carries the token. It never reaches any server.", file=sys.stderr)
+    # A token the owner chose (secret or file) is never printed: logs are
+    # kept, and the owner knows it already. Only a generated one is shown,
+    # because otherwise nobody could pair.
+    token_known = bool(args.token_file or os.environ.get(TOKEN_ENV))
+    fragment = "" if token_known else f"#token={token}"
+    if forwarded:
+        print(f"  Open on your phone:  {forwarded}/{fragment}", file=sys.stderr)
+        print("                       (private port: only you, signed in to GitHub)", file=sys.stderr)
+    print(f"  Open here:           {local_url}/{fragment}", file=sys.stderr)
+    if args.public_url and not args.no_hosted_ui:
+        bridge_url = args.public_url.rstrip("/")
+        joiner = "&" if fragment else ""
+        print(f"  Hosted app:          {HOSTED_UI_URL}#bridge={bridge_url}{joiner}{fragment[1:]}", file=sys.stderr)
+    if token_known:
+        print(f"  Pairing token:       the one you set ({'--token-file' if args.token_file else TOKEN_ENV})", file=sys.stderr)
+    else:
+        print("  The part after # carries the token. It never reaches any server.", file=sys.stderr)
     print(f"  Workspace:           {workspace}", file=sys.stderr)
     print(
         f"  Chinook Security:    {chinook_dir or 'not installed (run with --fetch-chinook)'}",

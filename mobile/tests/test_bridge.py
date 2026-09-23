@@ -333,6 +333,34 @@ class BridgeTest(unittest.TestCase):
         self.assertNotRegex(html, r"\son[a-z]+=")
 
 
+class CodespacesTest(unittest.TestCase):
+    def test_the_token_comes_from_the_codespaces_secret(self):
+        self.assertEqual(bridge_module.read_token(None, {"CODEX_MOBILE_TOKEN": " " + "t" * 30 + "\n"}), "t" * 30)
+
+    def test_a_short_secret_is_refused_not_used(self):
+        with self.assertRaises(SystemExit):
+            bridge_module.read_token(None, {"CODEX_MOBILE_TOKEN": "short"})
+
+    def test_without_a_secret_a_strong_token_is_generated(self):
+        first = bridge_module.read_token(None, {})
+        self.assertGreaterEqual(len(first), 40)
+        self.assertNotEqual(first, bridge_module.read_token(None, {}))
+
+    def test_the_forwarded_address_follows_the_documented_variables(self):
+        env = {"CODESPACE_NAME": "owner-fuzzy-disco-x1", "GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN": "app.github.dev"}
+        self.assertEqual(bridge_module.codespace_url(8765, env), "https://owner-fuzzy-disco-x1-8765.app.github.dev")
+        self.assertEqual(bridge_module.codespace_url(8765, {}), "")
+
+    def test_the_devcontainer_runs_the_scripts_that_exist(self):
+        text = (REPO / ".devcontainer/devcontainer.json").read_text()
+        for script in re.findall(r"bash (mobile/codespaces/[a-z]+\.sh)", text):
+            self.assertTrue((REPO / script).is_file(), script)
+        self.assertIn("8765", text)
+        self.assertIn("CODEX_MOBILE_TOKEN", text)
+        start = (REPO / "mobile/codespaces/start.sh").read_text()
+        self.assertIn("--port 8765", start)
+
+
 class SecurityScanTest(unittest.TestCase):
     def test_exit_code_2_is_unproven_not_clean(self):
         outcome = bridge_module.classify_bot_run(

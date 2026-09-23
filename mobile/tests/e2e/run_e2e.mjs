@@ -381,6 +381,10 @@ async function main() {
       /No bridge answered|allow this page/.test(strangerError),
       "an unlisted origin is refused: " + strangerError.trim(),
     );
+    check(
+      await stranger.isVisible("#codespaces-start"),
+      "the published page offers to start a codespace",
+    );
     await stranger.close();
 
     // iPad: landscape keeps the thread list open, portrait centres one
@@ -515,6 +519,10 @@ async function main() {
     check(
       await wrong.isVisible("#pair-error"),
       "a wrong token shows the pairing screen with an error",
+    );
+    check(
+      !(await wrong.isVisible("#codespaces-start")),
+      "served by a bridge, the page does not offer a codespace",
     );
     await shot(wrong, "07-pair");
     await wrong.close();

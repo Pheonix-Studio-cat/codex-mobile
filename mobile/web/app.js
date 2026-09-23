@@ -1509,8 +1509,7 @@
       showView("security");
     });
     $("logout-button").addEventListener("click", async () => {
-      if (!confirm("Sign out of Codex on the computer running the bridge?"))
-        return;
+      if (!confirm("Sign out of Codex in this codespace?")) return;
       try {
         await rpc("account/logout", {});
       } catch (error) {
@@ -1525,9 +1524,6 @@
 
     $("login-device").addEventListener("click", () =>
       startLogin({ type: "chatgptDeviceCode" }),
-    );
-    $("login-browser").addEventListener("click", () =>
-      startLogin({ type: "chatgpt" }),
     );
     $("login-cancel").addEventListener("click", cancelLogin);
     $("device-code-copy").addEventListener("click", async () => {
@@ -1576,8 +1572,21 @@
     });
   }
 
+  // The "start a codespace" card is for the published page. Served by a
+  // bridge (inside the codespace), the codespace already exists.
+  async function markServedByBridge() {
+    try {
+      const response = await fetch("api/health", { cache: "no-store" });
+      const health = response.ok ? await response.json() : null;
+      if (health && health.ok) $("codespaces-start").hidden = true;
+    } catch (_) {
+      /* the published page: keep the card */
+    }
+  }
+
   function start() {
     bind();
+    markServedByBridge();
     const fromLink = pairingFromFragment();
     const bridge =
       fromLink && fromLink.bridge !== null

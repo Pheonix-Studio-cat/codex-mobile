@@ -1,0 +1,28 @@
+// Codex Mobile in GitHub Codespaces: the computer Codex runs on, without
+// owning one. Start it from a phone or iPad; the app opens in the browser.
+// Setup and background: mobile/README.md.
+{
+  "name": "Codex Mobile",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  // The smallest machine: the free quota counts core hours, and the bridge
+  // and Codex need little.
+  "hostRequirements": { "cpus": 2 },
+  // Codex (released, pinned) and Chinook Security (pinned commit), once.
+  "postCreateCommand": "bash mobile/codespaces/setup.sh",
+  // The bridge, on every start of the codespace.
+  "postStartCommand": "bash mobile/codespaces/start.sh",
+  // Shows the address when the editor is opened.
+  "postAttachCommand": "cat \"$HOME/codex-mobile/link.txt\" 2>/dev/null || true",
+  "forwardPorts": [8765],
+  "portsAttributes": {
+    "8765": { "label": "Codex Mobile", "onAutoForward": "notify" }
+  },
+  "secrets": {
+    "CODEX_MOBILE_TOKEN": {
+      "description": "Your pairing token for Codex Mobile: any random text of at least 24 characters. Set once; the app asks for it when pairing."
+    }
+  }
+}

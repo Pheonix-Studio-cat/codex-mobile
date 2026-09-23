@@ -114,23 +114,29 @@
     <main>
       <!-- Pairing -->
       <section id="view-pair" class="view center" hidden>
-        <div class="card narrow">
-          <h2>Pair this device</h2>
-          <p>
-            Open the pairing link the bridge printed when it started. Or enter
-            the bridge address and the token here.
-          </p>
+        <div class="card narrow stack">
+          <h2>Codex Mobile</h2>
+          <div id="codespaces-start" class="stack">
+            <p>
+              Codex needs a computer to run commands on. GitHub lends you one: a
+              codespace. Start it here — from this phone or iPad, no PC
+              involved.
+            </p>
+            <a
+              class="button primary wide"
+              href="https://codespaces.new/Pheonix-Studio-cat/codex-mobile?quickstart=1"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Start Codex in GitHub Codespaces</a
+            >
+            <p class="muted small">
+              When it is ready, open the <strong>Codex Mobile</strong> address
+              it shows (port 8765) and add that page to your home screen. Free
+              accounts include about 60 hours of use a month; without a payment
+              method GitHub stops instead of charging.
+            </p>
+          </div>
           <form id="pair-form" class="stack">
-            <label for="pair-bridge">Bridge address</label>
-            <input
-              id="pair-bridge"
-              type="url"
-              inputmode="url"
-              placeholder="https://… (empty if this page comes from the bridge)"
-              autocomplete="off"
-              autocapitalize="off"
-              spellcheck="false"
-            />
             <label for="pair-token">Pairing token</label>
             <input
               id="pair-token"
@@ -140,6 +146,19 @@
               spellcheck="false"
               required
             />
+            <details id="pair-advanced">
+              <summary>Bridge somewhere else</summary>
+              <label for="pair-bridge">Bridge address</label>
+              <input
+                id="pair-bridge"
+                type="url"
+                inputmode="url"
+                placeholder="https://…"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            </details>
             <button class="primary" type="submit">Pair</button>
           </form>
           <p id="pair-error" class="error" role="alert" hidden></p>
@@ -151,9 +170,8 @@
         <div class="card narrow">
           <h2>Sign in to Codex</h2>
           <p class="muted">
-            This is the regular Codex sign-in. Credentials are stored by Codex
-            on the computer running the bridge, exactly as with
-            <code>codex login</code>.
+            This is the regular Codex sign-in. Codex keeps the credentials in
+            your codespace, exactly as with <code>codex login</code>.
           </p>
           <div class="stack">
             <button id="login-device" class="primary">
@@ -198,17 +216,6 @@
                 </button>
               </form>
             </details>
-            <details>
-              <summary>Sign in with a browser on the computer</summary>
-              <p class="muted small">
-                Only works if this device can reach the computer's
-                <code>localhost</code>, i.e. when you use the interface on the
-                computer itself.
-              </p>
-              <button id="login-browser" class="secondary">
-                Start browser sign-in
-              </button>
-            </details>
           </div>
           <p id="login-error" class="error" role="alert" hidden></p>
         </div>
@@ -240,7 +247,7 @@
                 rel="noopener noreferrer"
                 >Chinook Security</a
               >
-              bots over the workspace on the computer. Findings name the rule
+              bots over the workspace in your codespace. Findings name the rule
               and the place — never the secret itself.
             </p>
             <dl class="facts">

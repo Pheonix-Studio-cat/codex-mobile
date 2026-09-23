@@ -6,12 +6,14 @@ on:
   pull_request:
     paths:
       - "mobile/**"
+      - ".devcontainer/**"
       - ".github/workflows/mobile.yml"
       - ".github/workflows/chinook.yml"
   push:
     branches: [main]
     paths:
       - "mobile/**"
+      - ".devcontainer/**"
       - ".github/workflows/mobile.yml"
       - ".github/workflows/chinook.yml"
   workflow_dispatch:
