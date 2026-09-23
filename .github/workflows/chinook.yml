@@ -1,0 +1,89 @@
+# Chinook Security checks this fork.
+#
+# Two jobs, on purpose:
+# - `mobile` gates what this fork adds (mobile/ and the workflows). It fails
+#   on high findings, like any Chinook Security user would configure it.
+# - `repository` reports on the whole tree, upstream Codex included. The
+#   upstream code carries test fixtures that look like credentials, so a gate
+#   there would be red on every pull request and teach everyone to ignore red.
+#   It therefore reports (fail-on: never) and writes the totals into the job
+#   summary. A run that could not determine anything still ends with 2.
+#
+# The Chinook Security pin below must match CHINOOK_COMMIT in
+# mobile/bridge/codex_mobile.py; mobile/tests/test_bridge.py checks it.
+name: Chinook Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Mondays: new advisories arrive without a commit.
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    name: Mobile (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/secret-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          path: mobile
+          sarif: ""
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/code-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          path: mobile
+          sarif: ""
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/dependency-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          path: mobile
+          sarif: ""
+      # The workflow bot always reads .github/workflows of the whole checkout.
+      # Upstream workflows only reach "medium"; this fork's own must not
+      # reach "high".
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/workflow-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          sarif: ""
+
+  repository:
+    name: Whole repository (report)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/secret-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          fail-on: never
+          report: chinook-reports/secret-bot.json
+          sarif: ""
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/code-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          fail-on: never
+          report: chinook-reports/code-bot.json
+          sarif: ""
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/dependency-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          fail-on: never
+          report: chinook-reports/dependency-bot.json
+          sarif: ""
+      - uses: Pheonix-Studio-cat/Chinook-security/actions/license-bot@fa2e27fbc350375188113f87acb105f3c87723b6
+        with:
+          fail-on: never
+          report: chinook-reports/license-bot.json
+          sarif: ""
+
+      - name: Summary
+        if: always()
+        run: python3 mobile/scripts/chinook_summary.py chinook-reports >> "$GITHUB_STEP_SUMMARY"

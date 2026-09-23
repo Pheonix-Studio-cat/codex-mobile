@@ -1,0 +1,75 @@
+# Codex Mobile: the bridge, the web interface, and the whole path from the
+# phone to a real `codex app-server`.
+name: Codex Mobile
+
+on:
+  pull_request:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+      - ".github/workflows/chinook.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mobile/**"
+      - ".github/workflows/mobile.yml"
+      - ".github/workflows/chinook.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Bridge and renderer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+      - name: Bridge tests (Python standard library only)
+        run: python3 -m unittest discover -s mobile/tests -p 'test_*.py' -v
+      - name: Markdown renderer tests
+        run: node mobile/tests/test_markdown.mjs
+      - name: Syntax of the interface scripts
+        run: |
+          node --check mobile/web/app.js
+          node --check mobile/web/markdown.js
+
+  e2e:
+    name: Phone to real Codex (end to end)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # Pinned: the test proves the interface against this released Codex.
+      CODEX_VERSION: "0.156.1"
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      # Chinook Security at the same commit the bridge pins.
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: Pheonix-Studio-cat/Chinook-security
+          ref: fa2e27fbc350375188113f87acb105f3c87723b6
+          path: .chinook
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22
+      - name: Install Codex and Playwright
+        working-directory: mobile/tests/e2e
+        run: |
+          npm install --no-save --no-audit --no-fund "@openai/codex@${CODEX_VERSION}" playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: End-to-end test
+        env:
+          CHINOOK_HOME: ${{ github.workspace }}/.chinook
+          SCREENSHOT_DIR: ${{ runner.temp }}/screenshots
+        run: |
+          mkdir -p "$SCREENSHOT_DIR"
+          CODEX_BIN="$PWD/mobile/tests/e2e/node_modules/.bin/codex" node mobile/tests/e2e/run_e2e.mjs
