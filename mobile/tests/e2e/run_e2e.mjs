@@ -141,6 +141,18 @@ async function main() {
     const chinook = process.env.CHINOOK_HOME
       ? ["--chinook", process.env.CHINOOK_HOME]
       : [];
+    // Stands in for GitHub Pages: the same files, served from another origin.
+    const hostedPort = 18950;
+    start("python3", [
+      "-m",
+      "http.server",
+      String(hostedPort),
+      "--bind",
+      "127.0.0.1",
+      "--directory",
+      resolve(here, "../../web"),
+    ]);
+    chinook.push("--allow-origin", `http://127.0.0.1:${hostedPort}`);
     const one = await startBridge(
       join(root, "one"),
       18901,
@@ -316,6 +328,60 @@ async function main() {
       );
       console.log("skip the scan itself: CHINOOK_HOME is not set");
     }
+
+    // The hosted interface (another origin, like GitHub Pages) pairs through
+    // the link and runs a whole turn against the same bridge.
+    const hosted = await context.newPage();
+    const hostedErrors = [];
+    hosted.on("pageerror", (error) => hostedErrors.push(String(error)));
+    await hosted.goto(
+      `http://127.0.0.1:${hostedPort}/#bridge=http://127.0.0.1:18901&token=${one.token}`,
+    );
+    await hosted.waitForSelector("#view-chat:not([hidden])", {
+      timeout: 30000,
+    });
+    check(
+      !hosted.url().includes("token="),
+      "hosted: the token is removed from the address bar",
+    );
+    await hosted.evaluate(() =>
+      document.getElementById("new-thread-button").click(),
+    );
+    await hosted.fill("#prompt", "Once more, from the hosted page.");
+    await hosted.tap("#send");
+    await hosted.waitForSelector(".approval", { timeout: 30000 });
+    await hosted.tap(".approval button.primary");
+    await hosted.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll(".msg.agent")).some((el) =>
+          /step two/.test(el.textContent),
+        ),
+      null,
+      { timeout: 30000 },
+    );
+    check(true, "hosted: a whole turn with approval works across origins");
+    check(
+      hostedErrors.length === 0,
+      "hosted: no page errors" +
+        (hostedErrors.length ? ": " + hostedErrors.join(" / ") : ""),
+    );
+    await shot(hosted, "08-hosted");
+    await hosted.close();
+
+    // An origin the bridge does not list cannot use it, even with the token.
+    const stranger = await context.newPage();
+    await stranger.goto(
+      `http://localhost:${hostedPort}/#bridge=http://127.0.0.1:18901&token=${one.token}`,
+    );
+    await stranger.waitForSelector("#view-pair:not([hidden])", {
+      timeout: 30000,
+    });
+    const strangerError = await stranger.textContent("#pair-error");
+    check(
+      /No bridge answered|allow this page/.test(strangerError),
+      "an unlisted origin is refused: " + strangerError.trim(),
+    );
+    await stranger.close();
 
     // Without the token nothing works.
     const denied = await fetch("http://127.0.0.1:18901/api/rpc", {

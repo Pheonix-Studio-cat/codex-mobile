@@ -6,13 +6,31 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
     />
-    <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)" />
+    <meta
+      name="theme-color"
+      content="#0f1115"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f6f7f9"
+      media="(prefers-color-scheme: light)"
+    />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
     <meta name="apple-mobile-web-app-title" content="Codex" />
     <meta name="referrer" content="no-referrer" />
+    <!-- Served by the bridge, its stricter header applies as well. Served from
+         GitHub Pages, this is the only policy: scripts and styles from this
+         site only, and connections to the bridge. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'"
+    />
     <title>Codex Mobile</title>
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="icon.svg" type="image/svg+xml" />
@@ -24,16 +42,36 @@
   <body>
     <!-- Top bar -->
     <header class="topbar">
-      <button id="menu-button" class="icon-button" aria-label="Threads" aria-controls="drawer" aria-expanded="false">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+      <button
+        id="menu-button"
+        class="icon-button"
+        aria-label="Threads"
+        aria-controls="drawer"
+        aria-expanded="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
       </button>
       <div class="topbar-title">
         <h1 id="title">Codex</h1>
         <p id="subtitle" class="muted"></p>
       </div>
-      <span id="connection" class="dot" data-state="offline" role="status" aria-label="offline"></span>
-      <button id="new-thread-button" class="icon-button" aria-label="New thread">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+      <span
+        id="connection"
+        class="dot"
+        data-state="offline"
+        role="status"
+        aria-label="offline"
+      ></span>
+      <button
+        id="new-thread-button"
+        class="icon-button"
+        aria-label="New thread"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
       </button>
     </header>
 
@@ -44,15 +82,31 @@
         <button id="drawer-new-thread" class="primary wide">New thread</button>
       </div>
       <div class="drawer-tabs" role="tablist">
-        <button role="tab" id="tab-threads" aria-selected="true" data-view="chat">Threads</button>
-        <button role="tab" id="tab-security" aria-selected="false" data-view="security">Security</button>
+        <button
+          role="tab"
+          id="tab-threads"
+          aria-selected="true"
+          data-view="chat"
+        >
+          Threads
+        </button>
+        <button
+          role="tab"
+          id="tab-security"
+          aria-selected="false"
+          data-view="security"
+        >
+          Security
+        </button>
       </div>
       <ul id="thread-list" class="thread-list"></ul>
       <p id="thread-list-empty" class="muted pad" hidden>No threads yet.</p>
       <div class="drawer-foot">
         <p id="account-line" class="muted small"></p>
         <button id="logout-button" class="ghost small" hidden>Sign out</button>
-        <button id="unpair-button" class="ghost small">Forget this device</button>
+        <button id="unpair-button" class="ghost small">
+          Forget this device
+        </button>
       </div>
     </nav>
 
@@ -62,12 +116,29 @@
         <div class="card narrow">
           <h2>Pair this device</h2>
           <p>
-            Open the address the bridge printed when it started — it ends in <code>#token=…</code>. Or paste the
-            token here.
+            Open the pairing link the bridge printed when it started. Or enter
+            the bridge address and the token here.
           </p>
           <form id="pair-form" class="stack">
+            <label for="pair-bridge">Bridge address</label>
+            <input
+              id="pair-bridge"
+              type="url"
+              inputmode="url"
+              placeholder="https://… (empty if this page comes from the bridge)"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+            />
             <label for="pair-token">Pairing token</label>
-            <input id="pair-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required />
+            <input
+              id="pair-token"
+              type="password"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              required
+            />
             <button class="primary" type="submit">Pair</button>
           </form>
           <p id="pair-error" class="error" role="alert" hidden></p>
@@ -79,17 +150,32 @@
         <div class="card narrow">
           <h2>Sign in to Codex</h2>
           <p class="muted">
-            This is the regular Codex sign-in. Credentials are stored by Codex on the computer running the bridge,
-            exactly as with <code>codex login</code>.
+            This is the regular Codex sign-in. Credentials are stored by Codex
+            on the computer running the bridge, exactly as with
+            <code>codex login</code>.
           </p>
           <div class="stack">
-            <button id="login-device" class="primary">Sign in with ChatGPT (device code)</button>
+            <button id="login-device" class="primary">
+              Sign in with ChatGPT (device code)
+            </button>
             <div id="device-code" class="device-code" hidden>
               <p>Open the page below, sign in and enter this code:</p>
-              <p id="device-code-value" class="code-display" aria-live="polite"></p>
+              <p
+                id="device-code-value"
+                class="code-display"
+                aria-live="polite"
+              ></p>
               <div class="row">
-                <button id="device-code-copy" class="secondary">Copy code</button>
-                <a id="device-code-link" class="button secondary" target="_blank" rel="noopener noreferrer">Open page</a>
+                <button id="device-code-copy" class="secondary">
+                  Copy code
+                </button>
+                <a
+                  id="device-code-link"
+                  class="button secondary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Open page</a
+                >
               </div>
               <p class="muted small">Waiting for the sign-in to complete…</p>
               <button id="login-cancel" class="ghost small">Cancel</button>
@@ -98,17 +184,29 @@
               <summary>Use an API key instead</summary>
               <form id="apikey-form" class="stack">
                 <label for="apikey">OpenAI API key</label>
-                <input id="apikey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required />
-                <button class="secondary" type="submit">Sign in with API key</button>
+                <input
+                  id="apikey"
+                  type="password"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  required
+                />
+                <button class="secondary" type="submit">
+                  Sign in with API key
+                </button>
               </form>
             </details>
             <details>
               <summary>Sign in with a browser on the computer</summary>
               <p class="muted small">
-                Only works if this device can reach the computer's <code>localhost</code>, i.e. when you use the
-                interface on the computer itself.
+                Only works if this device can reach the computer's
+                <code>localhost</code>, i.e. when you use the interface on the
+                computer itself.
               </p>
-              <button id="login-browser" class="secondary">Start browser sign-in</button>
+              <button id="login-browser" class="secondary">
+                Start browser sign-in
+              </button>
             </details>
           </div>
           <p id="login-error" class="error" role="alert" hidden></p>
@@ -119,7 +217,9 @@
       <section id="view-chat" class="view chat" hidden>
         <div id="messages" class="messages" aria-live="polite">
           <div id="empty-state" class="empty-state">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H8l-4 4z" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16v10H8l-4 4z" />
+            </svg>
             <p>Ask Codex to do something in</p>
             <p id="empty-workspace" class="mono small"></p>
           </div>
@@ -132,8 +232,15 @@
           <div class="card">
             <h2>Security scan</h2>
             <p class="muted small">
-              Runs the <a href="https://github.com/Pheonix-Studio-cat/Chinook-security" target="_blank" rel="noopener noreferrer">Chinook Security</a>
-              bots over the workspace on the computer. Findings name the rule and the place — never the secret itself.
+              Runs the
+              <a
+                href="https://github.com/Pheonix-Studio-cat/Chinook-security"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Chinook Security</a
+              >
+              bots over the workspace on the computer. Findings name the rule
+              and the place — never the secret itself.
             </p>
             <dl class="facts">
               <dt>Workspace</dt>
@@ -142,7 +249,12 @@
               <dd id="sec-version" class="mono"></dd>
             </dl>
             <button id="sec-run" class="primary wide">Run all bots</button>
-            <p id="sec-progress" class="muted small" aria-live="polite" hidden></p>
+            <p
+              id="sec-progress"
+              class="muted small"
+              aria-live="polite"
+              hidden
+            ></p>
             <p id="sec-error" class="error" role="alert" hidden></p>
           </div>
           <div id="sec-results" class="stack"></div>
@@ -164,10 +276,20 @@
           aria-label="Message"
         ></textarea>
         <button id="send" class="send" type="submit" aria-label="Send">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
         </button>
-        <button id="stop" class="send stop" type="button" aria-label="Stop" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5" /></svg>
+        <button
+          id="stop"
+          class="send stop"
+          type="button"
+          aria-label="Stop"
+          hidden
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7" y="7" width="10" height="10" rx="1.5" />
+          </svg>
         </button>
       </form>
     </footer>

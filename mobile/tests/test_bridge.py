@@ -157,6 +157,53 @@ class BridgeTest(unittest.TestCase):
             status, _, _ = self.client.request("/api/rpc", {"method": "account/read"}, headers={"Origin": origin})
             self.assertEqual(status, 200, origin)
 
+    def test_the_hosted_interface_gets_cors_headers_and_a_preflight(self):
+        origin = "https://proxy.example"
+        request = urllib.request.Request(
+            self.client.base + "/api/rpc",
+            method="OPTIONS",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization, content-type",
+                "Access-Control-Request-Private-Network": "true",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            self.assertEqual(response.status, 204)
+            self.assertEqual(response.headers["Access-Control-Allow-Origin"], origin)
+            self.assertIn("Authorization", response.headers["Access-Control-Allow-Headers"])
+            self.assertEqual(response.headers["Access-Control-Allow-Private-Network"], "true")
+        status, headers, _ = self.client.request("/api/rpc", {"method": "account/read"}, headers={"Origin": origin})
+        self.assertEqual(status, 200)
+        self.assertEqual(headers["Access-Control-Allow-Origin"], origin)
+        # A refused token must still be readable by the page, or it cannot say why.
+        status, headers, _ = self.client.request(
+            "/api/rpc", {"method": "account/read"}, token="wrong-" + "z" * 40, headers={"Origin": origin}
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(headers["Access-Control-Allow-Origin"], origin)
+
+    def test_foreign_origins_get_no_preflight_and_no_cors_headers(self):
+        request = urllib.request.Request(
+            self.client.base + "/api/rpc",
+            method="OPTIONS",
+            headers={"Origin": "https://evil.example", "Access-Control-Request-Method": "POST"},
+        )
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request, timeout=5)
+        self.assertEqual(caught.exception.code, 403)
+        self.assertIsNone(caught.exception.headers.get("Access-Control-Allow-Origin"))
+        status, headers, _ = self.client.request("/api/rpc", {"method": "account/read"}, headers={"Origin": "https://evil.example"})
+        self.assertEqual(status, 403)
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+
+    def test_same_origin_requests_need_no_cors_headers(self):
+        _, headers, _ = self.client.request(
+            "/api/rpc", {"method": "account/read"}, headers={"Origin": f"http://127.0.0.1:{self.port}"}
+        )
+        self.assertNotIn("Access-Control-Allow-Origin", headers)
+
     def test_the_health_check_needs_no_token_and_says_nothing_private(self):
         status, _, body = self.client.request("/api/health", token=None)
         self.assertEqual(status, 200)

@@ -1,0 +1,59 @@
+# Publishes the Codex Mobile interface (mobile/web) on GitHub Pages.
+#
+# Through the `gh-pages` branch, not `actions/deploy-pages`: creating that
+# branch switches Pages on by itself, so no repository setting has to be
+# flipped by hand (the same way Chinook Security publishes its site).
+#
+# The page is static and talks only to the bridge the pairing link names. It
+# holds no secret: the token travels in the URL fragment, which GitHub never
+# receives.
+name: Codex Mobile Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mobile/web/**"
+      - ".github/workflows/mobile-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only this job writes, and only to set the generated branch.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check the page before publishing it
+        run: |
+          node --check mobile/web/app.js
+          node --check mobile/web/markdown.js
+          node mobile/tests/test_markdown.mjs
+
+      - name: Publish to gh-pages
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # One fresh commit each time: the branch is generated content.
+          git worktree add --detach /tmp/site
+          git -C /tmp/site checkout --orphan gh-pages
+          git -C /tmp/site rm -rq --cached . || true
+          find /tmp/site -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r mobile/web/. /tmp/site/
+          touch /tmp/site/.nojekyll
+          cd /tmp/site
+          git add -A
+          git commit -q -m "Codex Mobile from ${GITHUB_SHA:0:12}"
+          git push -q --force origin gh-pages
+          echo "Published: https://pheonix-studio-cat.github.io/${GITHUB_REPOSITORY#*/}/"

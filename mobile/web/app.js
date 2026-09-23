@@ -8,12 +8,17 @@
 
 (function () {
   const TOKEN_KEY = "codex-mobile.token";
+  const BRIDGE_KEY = "codex-mobile.bridge";
   const THREAD_KEY = "codex-mobile.thread";
 
   const $ = (id) => document.getElementById(id);
 
   const state = {
     token: null,
+    // Where the bridge is. Empty: the page was served by the bridge itself.
+    // Set: the page comes from elsewhere (GitHub Pages) and talks to the
+    // bridge across origins; the bridge must list this page's origin.
+    base: "",
     account: null,
     requiresAuth: true,
     workspace: "",
@@ -44,7 +49,7 @@
   }
 
   async function api(path, body) {
-    const response = await fetch(path, {
+    const response = await fetch(state.base + path, {
       method: body === undefined ? "GET" : "POST",
       headers: Object.assign(
         { Authorization: "Bearer " + state.token },
@@ -101,7 +106,7 @@
       state.streamAbort = controller;
       setConnection("connecting");
       try {
-        const response = await fetch("/api/events", {
+        const response = await fetch(state.base + "/api/events", {
           headers: { Authorization: "Bearer " + state.token },
           signal: controller.signal,
           cache: "no-store",
@@ -1339,6 +1344,7 @@
     state.token = null;
     forget(TOKEN_KEY);
     forget(THREAD_KEY);
+    $("pair-bridge").value = state.base;
     showView("pair");
     showError("pair-error", reason || "");
   }
@@ -1347,15 +1353,59 @@
   // Start
   // ------------------------------------------------------------------
 
-  function tokenFromFragment() {
-    const match = location.hash.match(/token=([A-Za-z0-9_-]+)/);
-    if (!match) return null;
+  // The pairing link carries everything after "#", which never reaches any
+  // server — not the bridge, and not GitHub Pages:
+  //   #token=...                       page served by the bridge
+  //   #bridge=https://host:port&token=...   page served from elsewhere
+  function pairingFromFragment() {
+    const params = new URLSearchParams(location.hash.replace(/^#/, ""));
+    const token = params.get("token");
+    const bridge = params.get("bridge");
+    if (!token && !bridge) return null;
     // Remove the token from the address bar and from history.
     history.replaceState(null, "", location.pathname + location.search);
-    return match[1];
+    return { token: token, bridge: bridge };
   }
 
-  async function pair(token) {
+  // Only an http(s) origin is accepted as bridge address; nothing after it.
+  function normalizeBridge(value) {
+    const text = String(value || "").trim();
+    if (!text) return "";
+    let url;
+    try {
+      url = new URL(/^https?:\/\//i.test(text) ? text : "https://" + text);
+    } catch (_) {
+      throw new Error("That is not a web address.");
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("The bridge address must start with https://");
+    }
+    if (url.origin === location.origin) return "";
+    return url.origin;
+  }
+
+  async function pair(token, bridge) {
+    try {
+      state.base = normalizeBridge(bridge);
+    } catch (error) {
+      showView("pair");
+      showError("pair-error", error.message);
+      return;
+    }
+    $("pair-bridge").value = state.base;
+    if (location.protocol === "https:" && state.base.startsWith("http:")) {
+      const local = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(
+        state.base,
+      );
+      if (!local) {
+        showView("pair");
+        showError(
+          "pair-error",
+          "This page is served over HTTPS, so the browser only lets it reach a bridge over HTTPS. Give the bridge an HTTPS address (for example a tunnel) and pair again.",
+        );
+        return;
+      }
+    }
     state.token = token;
     try {
       const status = await api("/api/status");
@@ -1363,13 +1413,22 @@
     } catch (error) {
       state.token = null;
       showView("pair");
-      showError(
-        "pair-error",
-        error.status === 401 ? "That token was not accepted." : error.message,
-      );
+      let message = error.message;
+      if (error.status === 401) message = "That token was not accepted.";
+      else if (error.status === 404 || error instanceof TypeError)
+        message = state.base
+          ? "No bridge answered at " +
+            state.base +
+            ". Is it running, and does it allow this page (--allow-origin " +
+            location.origin +
+            ")?"
+          : "No bridge answered here. Enter the bridge address.";
+      showError("pair-error", message);
       return;
     }
     remember(TOKEN_KEY, token);
+    if (state.base) remember(BRIDGE_KEY, state.base);
+    else forget(BRIDGE_KEY);
     showError("pair-error", "");
     connectEvents();
     const signedIn = await refreshAccount();
@@ -1393,7 +1452,7 @@
     $("pair-form").addEventListener("submit", (event) => {
       event.preventDefault();
       const token = $("pair-token").value.trim();
-      if (token) pair(token);
+      if (token) pair(token, $("pair-bridge").value);
     });
     $("menu-button").addEventListener("click", openDrawer);
     $("scrim").addEventListener("click", closeDrawer);
@@ -1484,8 +1543,14 @@
 
   function start() {
     bind();
-    const token = tokenFromFragment() || recall(TOKEN_KEY);
-    if (token) pair(token);
+    const fromLink = pairingFromFragment();
+    const bridge =
+      fromLink && fromLink.bridge !== null
+        ? fromLink.bridge
+        : recall(BRIDGE_KEY) || "";
+    const token = (fromLink && fromLink.token) || recall(TOKEN_KEY);
+    $("pair-bridge").value = bridge;
+    if (token) pair(token, bridge);
     else showView("pair");
   }
 

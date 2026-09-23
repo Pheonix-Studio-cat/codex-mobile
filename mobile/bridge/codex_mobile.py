@@ -89,6 +89,12 @@ ANSWERABLE_SERVER_REQUESTS = frozenset(
     }
 )
 
+# The same interface, published on GitHub Pages. The bridge accepts it as an
+# origin by default so the hosted page can be installed on a phone once and
+# pointed at any bridge. It still needs the pairing token for every request.
+HOSTED_UI_URL = "https://pheonix-studio-cat.github.io/codex-mobile/"
+HOSTED_UI_ORIGIN = "https://pheonix-studio-cat.github.io"
+
 MAX_BODY_BYTES = 1_000_000
 RPC_TIMEOUT_SECONDS = 60
 KEEPALIVE_SECONDS = 15
@@ -640,6 +646,15 @@ class Bridge:
             return False
         return hmac.compare_digest(header[len("Bearer ") :].encode(), self.token.encode())
 
+    def cross_origin(self, origin: Optional[str], host: Optional[str]) -> Optional[str]:
+        """The origin to name in CORS headers, if the request is an allowed
+        cross-origin one. Same-origin requests need no CORS headers."""
+        if origin is None or origin.rstrip("/") not in self.allowed_origins:
+            return None
+        if host and urlsplit(origin).netloc == host:
+            return None
+        return origin.rstrip("/")
+
     def origin_ok(self, origin: Optional[str], host: Optional[str]) -> bool:
         # Requests without Origin come from non-browser clients; they still
         # need the token. Browser requests must be same-origin or listed.
@@ -690,8 +705,15 @@ def make_handler(bridge: Bridge) -> Callable[..., BaseHTTPRequestHandler]:
             # header or in the URL fragment), so logging it is safe.
             log(f"{self.address_string()} {format % args}")
 
+        def _cors(self) -> None:
+            allowed = bridge.cross_origin(self.headers.get("Origin"), self.headers.get("Host"))
+            if allowed:
+                self.send_header("Access-Control-Allow-Origin", allowed)
+                self.send_header("Vary", "Origin")
+
         def _headers(self, status: int, content_type: str, length: Optional[int]) -> None:
             self.send_response(status)
+            self._cors()
             self.send_header("Content-Type", content_type)
             if length is not None:
                 self.send_header("Content-Length", str(length))
@@ -733,6 +755,27 @@ def make_handler(bridge: Bridge) -> Callable[..., BaseHTTPRequestHandler]:
             return body
 
         # -- routes --------------------------------------------------------
+
+        def do_OPTIONS(self) -> None:  # noqa: N802
+            """CORS preflight for the hosted interface. Answers only for
+            allowed origins; everyone else gets a plain refusal."""
+            allowed = bridge.cross_origin(self.headers.get("Origin"), self.headers.get("Host"))
+            if not allowed or not urlsplit(self.path).path.startswith("/api/"):
+                self.send_response(HTTPStatus.FORBIDDEN)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            self.send_response(HTTPStatus.NO_CONTENT)
+            self.send_header("Access-Control-Allow-Origin", allowed)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST")
+            self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+            self.send_header("Access-Control-Max-Age", "600")
+            self.send_header("Vary", "Origin")
+            # Chrome asks before a public page may talk to a private address.
+            if self.headers.get("Access-Control-Request-Private-Network") == "true":
+                self.send_header("Access-Control-Allow-Private-Network", "true")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
 
         def do_GET(self) -> None:  # noqa: N802
             path = urlsplit(self.path).path
@@ -870,6 +913,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="an extra browser origin to accept, e.g. the HTTPS address of a reverse proxy (repeatable)",
     )
     parser.add_argument(
+        "--no-hosted-ui",
+        action="store_true",
+        help=f"do not accept the interface published at {HOSTED_UI_URL}",
+    )
+    parser.add_argument(
+        "--public-url",
+        default="",
+        help="the HTTPS address under which the phone reaches this bridge (e.g. a tunnel); used in the pairing link",
+    )
+    parser.add_argument(
         "--token-file",
         default=None,
         help="read the pairing token from this file instead of generating a new one",
@@ -902,7 +955,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     app_server = AppServer([args.codex, "app-server"], hub)
     chinook_dir = resolve_chinook(args.chinook)
     scanner = SecurityScanner(chinook_dir, workspace, hub)
-    bridge = Bridge(app_server, hub, scanner, token, workspace, args.allow_origin)
+    origins = list(args.allow_origin)
+    if not args.no_hosted_ui:
+        origins.append(HOSTED_UI_ORIGIN)
+    bridge = Bridge(app_server, hub, scanner, token, workspace, origins)
 
     server = ThreadingHTTPServer((args.host, args.port), make_handler(bridge))
     server.daemon_threads = True
@@ -914,8 +970,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     port = server.server_address[1]
     print("", file=sys.stderr)
     print("  Codex Mobile is running.", file=sys.stderr)
-    print(f"  Open on your phone:  http://{shown_host}:{port}/#token={token}", file=sys.stderr)
-    print("  The part after # is the pairing token. It never reaches the server log.", file=sys.stderr)
+    local_url = f"http://{shown_host}:{port}"
+    print(f"  Open here:           {local_url}/#token={token}", file=sys.stderr)
+    if not args.no_hosted_ui:
+        bridge_url = (args.public_url or local_url).rstrip("/")
+        print(f"  Or the hosted app:   {HOSTED_UI_URL}#bridge={bridge_url}&token={token}", file=sys.stderr)
+        if not args.public_url:
+            print("                       (from another device this needs --public-url https://...)", file=sys.stderr)
+    print("  The part after # carries the token. It never reaches any server.", file=sys.stderr)
     print(f"  Workspace:           {workspace}", file=sys.stderr)
     print(
         f"  Chinook Security:    {chinook_dir or 'not installed (run with --fetch-chinook)'}",
