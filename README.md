@@ -30,6 +30,11 @@ a PC or a terminal.
 
 ## Set up — once, from the iPad
 
+Anyone can use Codex Mobile: the codespace runs on **your** GitHub account and
+your free quota, and Codex signs in with **your** ChatGPT plan or API key.
+Nothing is shared with the owner of this repository. To keep your own copy,
+fork the repository first and use the _Start in Codespaces_ link of your fork.
+
 1. **Choose a pairing token.** Any random text of at least 24 characters.
    In GitHub: _Settings → Codespaces → Secrets → New secret_, name
    `CODEX_MOBILE_TOKEN`, repository `Pheonix-Studio-cat/codex-mobile`.
@@ -85,12 +90,25 @@ Details: [mobile/README.md](mobile/README.md).
 - **Chinook Security** — the bots gate this fork's own code and report on
   the whole repository.
 
+## Problems and contributions
+
+- **Security problems:** report them privately — [SECURITY.md](SECURITY.md).
+  Never in a public issue.
+- **Bugs and ideas for the app:** [open an issue](https://github.com/Pheonix-Studio-cat/codex-mobile/issues/new/choose)
+  with the _Codex Mobile_ template. Never paste your pairing token or keys.
+- **Pull requests** for `mobile/`, `.devcontainer/` and the Codex Mobile
+  workflows are welcome; the checks above must be green. Changes to Codex
+  itself belong to [openai/codex](https://github.com/openai/codex).
+
 ## Based on OpenAI Codex
 
 This is a fork of [openai/codex](https://github.com/openai/codex) (Apache
 License 2.0, see [LICENSE](LICENSE) and [NOTICE](NOTICE)). The Codex source is
 unchanged; everything mobile lives in [`mobile/`](mobile/),
-[`.devcontainer/`](.devcontainer/) and three workflows. For Codex itself —
+[`.devcontainer/`](.devcontainer/) and four workflows. The workflows
+inherited from upstream are switched off in this fork (they need OpenAI's
+credentials); [`fork-upkeep.yml`](.github/workflows/fork-upkeep.yml) keeps
+them off. For Codex itself —
 the CLI, the IDE extensions, its documentation — see the
 [upstream repository](https://github.com/openai/codex) and [`docs/`](docs/).
 

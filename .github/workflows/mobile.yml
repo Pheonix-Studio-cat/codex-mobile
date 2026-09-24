@@ -7,6 +7,8 @@ on:
     paths:
       - "mobile/**"
       - ".devcontainer/**"
+      - "SECURITY.md"
+      - ".github/workflows/fork-upkeep.yml"
       - ".github/workflows/mobile.yml"
       - ".github/workflows/chinook.yml"
   push:
@@ -14,6 +16,8 @@ on:
     paths:
       - "mobile/**"
       - ".devcontainer/**"
+      - "SECURITY.md"
+      - ".github/workflows/fork-upkeep.yml"
       - ".github/workflows/mobile.yml"
       - ".github/workflows/chinook.yml"
   workflow_dispatch:

@@ -1,0 +1,80 @@
+# Codex Mobile is a public fork of openai/codex. The workflows inherited from
+# upstream build, sign and release OpenAI's Codex; here they lack OpenAI's
+# credentials and fail on every push and every pull request (postmerge-ci:
+# startup_failure, blocking-ci: failure). A public repository that is always
+# red teaches everyone to ignore red.
+#
+# So this workflow disables every workflow that is not Codex Mobile's own —
+# in the repository's settings, not by editing upstream files, so syncing
+# with openai/codex stays free of conflicts. It runs weekly as well, to catch
+# workflows that arrive with a sync.
+#
+# To run an upstream workflow anyway: Actions → the workflow → Enable, and
+# remove it from the list below or it is disabled again next week.
+name: Fork upkeep
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  schedule:
+    - cron: "41 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disable-upstream-workflows:
+    # Never in the upstream repository itself.
+    if: github.repository != 'openai/codex'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Disable workflows that are not Codex Mobile's
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          API: ${{ github.api_url }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+
+          KEEP = {"chinook.yml", "mobile.yml", "mobile-pages.yml", "fork-upkeep.yml"}
+          api, repo = os.environ["API"], os.environ["REPO"]
+          headers = {
+              "Authorization": "Bearer " + os.environ["GH_TOKEN"],
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          }
+
+          def call(method, path):
+              request = urllib.request.Request(api + path, method=method, headers=headers)
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  body = response.read()
+                  return json.loads(body) if body else None
+
+          workflows = call("GET", f"/repos/{repo}/actions/workflows?per_page=100")["workflows"]
+          disabled = kept = 0
+          for workflow in workflows:
+              path = workflow["path"]
+              if not path.startswith(".github/workflows/"):
+                  continue  # GitHub's own, e.g. the Pages build
+              name = path.rsplit("/", 1)[-1]
+              if name in KEEP:
+                  kept += 1
+                  print(f"keep      {name}")
+              elif workflow["state"] == "active":
+                  call("PUT", f"/repos/{repo}/actions/workflows/{workflow['id']}/disable")
+                  disabled += 1
+                  print(f"disabled  {name}")
+              else:
+                  print(f"already   {name} ({workflow['state']})")
+          missing = KEEP - {w["path"].rsplit("/", 1)[-1] for w in workflows}
+          if missing:
+              raise SystemExit(f"Codex Mobile workflows not found: {sorted(missing)}")
+          print(f"\n{disabled} disabled now, {kept} kept")
+          PY
