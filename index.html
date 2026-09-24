@@ -1,0 +1,352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta
+      name="theme-color"
+      content="#0f1115"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta
+      name="theme-color"
+      content="#f6f7f9"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta
+      name="apple-mobile-web-app-status-bar-style"
+      content="black-translucent"
+    />
+    <meta name="apple-mobile-web-app-title" content="Codex" />
+    <meta name="referrer" content="no-referrer" />
+    <!-- Served by the bridge, its stricter header applies as well. Served from
+         GitHub Pages, this is the only policy: scripts and styles from this
+         site only, and connections to the bridge. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; manifest-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Codex Mobile</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icon.svg" type="image/svg+xml" />
+    <!-- iPadOS and iOS ignore SVG here; without a PNG the home screen shows a screenshot. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png" />
+    <link rel="stylesheet" href="app.css" />
+    <script src="markdown.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <!-- Top bar -->
+    <header class="topbar">
+      <button
+        id="menu-button"
+        class="icon-button"
+        aria-label="Threads"
+        aria-controls="drawer"
+        aria-expanded="false"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+      </button>
+      <div class="topbar-title">
+        <h1 id="title">Codex</h1>
+        <p id="subtitle" class="muted"></p>
+      </div>
+      <span
+        id="connection"
+        class="dot"
+        data-state="offline"
+        role="status"
+        aria-label="offline"
+      ></span>
+      <button
+        id="new-thread-button"
+        class="icon-button"
+        aria-label="New thread"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+    </header>
+
+    <!-- Drawer: threads, security, account -->
+    <div id="scrim" class="scrim" hidden></div>
+    <nav id="drawer" class="drawer" aria-label="Threads" hidden>
+      <div class="drawer-head">
+        <button id="drawer-new-thread" class="primary wide">New thread</button>
+      </div>
+      <div class="drawer-tabs" role="tablist">
+        <button
+          role="tab"
+          id="tab-threads"
+          aria-selected="true"
+          data-view="chat"
+        >
+          Threads
+        </button>
+        <button
+          role="tab"
+          id="tab-security"
+          aria-selected="false"
+          data-view="security"
+        >
+          Security
+        </button>
+      </div>
+      <ul id="thread-list" class="thread-list"></ul>
+      <p id="thread-list-empty" class="muted pad" hidden>No threads yet.</p>
+      <div class="drawer-foot">
+        <p id="account-line" class="muted small"></p>
+        <button id="logout-button" class="ghost small" hidden>Sign out</button>
+        <button id="unpair-button" class="ghost small">
+          Forget this device
+        </button>
+      </div>
+    </nav>
+
+    <main>
+      <!-- Pairing -->
+      <section id="view-pair" class="view center" hidden>
+        <div class="card narrow stack">
+          <h2>Codex Mobile</h2>
+          <div id="codespaces-start" class="stack">
+            <p>
+              Codex needs a computer to run commands on. GitHub lends you one: a
+              codespace. Start it here — from this phone or iPad, no PC
+              involved.
+            </p>
+            <a
+              class="button primary wide"
+              href="https://codespaces.new/Pheonix-Studio-cat/codex-mobile?quickstart=1"
+              target="_blank"
+              rel="noopener noreferrer"
+              >Start Codex in GitHub Codespaces</a
+            >
+            <p class="muted small">
+              When it is ready, open the <strong>Codex Mobile</strong> address
+              it shows (port 8765) and add that page to your home screen. Free
+              accounts include about 60 hours of use a month; without a payment
+              method GitHub stops instead of charging.
+            </p>
+          </div>
+          <form id="pair-form" class="stack">
+            <label for="pair-token">Pairing token</label>
+            <input
+              id="pair-token"
+              type="password"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              required
+            />
+            <details id="pair-advanced">
+              <summary>Bridge somewhere else</summary>
+              <label for="pair-bridge">Bridge address</label>
+              <input
+                id="pair-bridge"
+                type="url"
+                inputmode="url"
+                placeholder="https://…"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            </details>
+            <button class="primary" type="submit">Pair</button>
+          </form>
+          <p id="pair-error" class="error" role="alert" hidden></p>
+        </div>
+      </section>
+
+      <!-- Login: the same Codex login, driven from the phone -->
+      <section id="view-login" class="view center" hidden>
+        <div class="card narrow">
+          <h2>Sign in to Codex</h2>
+          <p class="muted">
+            This is the regular Codex sign-in. Codex keeps the credentials in
+            your codespace, exactly as with <code>codex login</code>.
+          </p>
+          <div class="stack">
+            <button id="login-device" class="primary">
+              Sign in with ChatGPT (device code)
+            </button>
+            <div id="device-code" class="device-code" hidden>
+              <p>Open the page below, sign in and enter this code:</p>
+              <p
+                id="device-code-value"
+                class="code-display"
+                aria-live="polite"
+              ></p>
+              <div class="row">
+                <button id="device-code-copy" class="secondary">
+                  Copy code
+                </button>
+                <a
+                  id="device-code-link"
+                  class="button secondary"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >Open page</a
+                >
+              </div>
+              <p class="muted small">Waiting for the sign-in to complete…</p>
+              <button id="login-cancel" class="ghost small">Cancel</button>
+            </div>
+            <details>
+              <summary>Use an API key instead</summary>
+              <form id="apikey-form" class="stack">
+                <label for="apikey">OpenAI API key</label>
+                <input
+                  id="apikey"
+                  type="password"
+                  autocomplete="off"
+                  autocapitalize="off"
+                  spellcheck="false"
+                  required
+                />
+                <button class="secondary" type="submit">
+                  Sign in with API key
+                </button>
+              </form>
+            </details>
+          </div>
+          <p id="login-error" class="error" role="alert" hidden></p>
+        </div>
+      </section>
+
+      <!-- Conversation -->
+      <section id="view-chat" class="view chat" hidden>
+        <div id="messages" class="messages" aria-live="polite">
+          <div id="empty-state" class="empty-state">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 5h16v10H8l-4 4z" />
+            </svg>
+            <p>Ask Codex to do something in</p>
+            <p id="empty-workspace" class="mono small"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Security: Chinook Security bots -->
+      <section id="view-security" class="view scroll" hidden>
+        <div class="pad stack">
+          <div class="card">
+            <h2>Security scan</h2>
+            <p class="muted small">
+              Runs the
+              <a
+                href="https://github.com/Pheonix-Studio-cat/Chinook-security"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Chinook Security</a
+              >
+              bots over the workspace in your codespace. Findings name the rule
+              and the place — never the secret itself.
+            </p>
+            <dl class="facts">
+              <dt>Workspace</dt>
+              <dd id="sec-workspace" class="mono"></dd>
+              <dt>Chinook Security</dt>
+              <dd id="sec-version" class="mono"></dd>
+            </dl>
+            <button id="sec-run" class="primary wide" disabled>
+              Run all bots
+            </button>
+            <p
+              id="sec-progress"
+              class="muted small"
+              aria-live="polite"
+              hidden
+            ></p>
+            <p id="sec-error" class="error" role="alert" hidden></p>
+          </div>
+          <div id="sec-results" class="stack"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Approvals sit above the composer, where the thumb is -->
+    <div id="approvals" class="approvals" aria-live="assertive"></div>
+
+    <footer id="composer-bar" class="composer-bar" hidden>
+      <div class="composer-tools">
+        <button
+          id="model-button"
+          type="button"
+          class="model-chip"
+          aria-haspopup="dialog"
+          aria-controls="model-sheet"
+        >
+          <span id="model-label">Model</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" />
+          </svg>
+        </button>
+      </div>
+      <form id="composer" class="composer">
+        <textarea
+          id="prompt"
+          rows="1"
+          placeholder="Message Codex"
+          enterkeyhint="send"
+          autocomplete="off"
+          aria-label="Message"
+        ></textarea>
+        <button id="send" class="send" type="submit" aria-label="Send">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 19V5M5 12l7-7 7 7" />
+          </svg>
+        </button>
+        <button
+          id="stop"
+          class="send stop"
+          type="button"
+          aria-label="Stop"
+          hidden
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="7" y="7" width="10" height="10" rx="1.5" />
+          </svg>
+        </button>
+      </form>
+      <p class="kbd-hint muted">
+        ⌘↩ send · ⌘. stop · ⌘K new thread · esc close list
+      </p>
+    </footer>
+
+    <!-- Model and thinking level: from Codex's own model list -->
+    <div
+      id="model-sheet"
+      class="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="model-sheet-title"
+      hidden
+    >
+      <div class="sheet-panel">
+        <div class="sheet-head">
+          <h2 id="model-sheet-title">Model</h2>
+          <button id="model-close" type="button" class="ghost small">
+            Done
+          </button>
+        </div>
+        <p id="model-note" class="muted small">
+          Applies from your next message in this thread.
+        </p>
+        <ul id="model-list" class="model-list" role="listbox"></ul>
+        <h3 class="sheet-sub">Thinking</h3>
+        <div id="effort-list" class="effort-list" role="radiogroup"></div>
+        <p id="effort-help" class="muted small"></p>
+      </div>
+    </div>
+
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
