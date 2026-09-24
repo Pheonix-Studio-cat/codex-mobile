@@ -33,6 +33,7 @@
     view: null,
     streamAbort: null,
     streamConnected: false,
+    lastStreamByte: 0,
     security: null,
   };
 
@@ -118,6 +119,7 @@
         if (!response.ok || !response.body)
           throw new Error("HTTP " + response.status);
         state.streamConnected = true;
+        state.lastStreamByte = Date.now();
         setConnection("online");
         delay = 1000;
         // Anything may have happened while the stream was down.
@@ -140,6 +142,7 @@
     let buffer = "";
     for (;;) {
       const chunk = await reader.read();
+      state.lastStreamByte = Date.now();
       if (chunk.done) return;
       buffer += decoder.decode(chunk.value, { stream: true });
       let boundary;
@@ -1584,7 +1587,44 @@
     }
   }
 
+  // The bridge sends something at least every 10 seconds. If nothing has
+  // arrived for 25, a proxy in between is holding the stream back (or the
+  // connection is gone without an error). Then the app asks instead of
+  // waiting: open approvals, and the current thread while a turn runs.
+  const STALL_MS = 25000;
+  let polling = false;
+  async function pollIfStalled() {
+    if (!state.token || polling || document.visibilityState !== "visible")
+      return;
+    if (Date.now() - state.lastStreamByte < STALL_MS) return;
+    polling = true;
+    try {
+      const pending = await api("/api/pending");
+      const open = new Set(pending.map((message) => approvalKey(message.id)));
+      pending.forEach(addApproval);
+      Array.from(state.approvals.keys()).forEach((key) => {
+        if (!open.has(key)) removeApproval(JSON.parse(key));
+      });
+      if (state.threadId && state.view === "chat") {
+        const result = await rpc("thread/read", {
+          threadId: state.threadId,
+          includeTurns: true,
+        });
+        const signature = JSON.stringify(result.thread.turns || []);
+        if (signature !== state.lastPolledThread) {
+          state.lastPolledThread = signature;
+          renderThread(result.thread);
+        }
+      }
+    } catch (_) {
+      /* the next round tries again */
+    } finally {
+      polling = false;
+    }
+  }
+
   function start() {
+    setInterval(pollIfStalled, 3000);
     bind();
     markServedByBridge();
     const fromLink = pairingFromFragment();

@@ -75,3 +75,7 @@ jobs:
         run: |
           mkdir -p "$SCREENSHOT_DIR"
           CODEX_BIN="$PWD/mobile/tests/e2e/node_modules/.bin/codex" node mobile/tests/e2e/run_e2e.mjs
+      # The same run without Chinook Security: the app must say it is missing
+      # instead of offering a scan. Without this step that branch never runs.
+      - name: End-to-end test without Chinook Security
+        run: CODEX_BIN="$PWD/mobile/tests/e2e/node_modules/.bin/codex" node mobile/tests/e2e/run_e2e.mjs

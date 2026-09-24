@@ -100,7 +100,7 @@ HOSTED_UI_ORIGIN = "https://pheonix-studio-cat.github.io"
 
 MAX_BODY_BYTES = 1_000_000
 RPC_TIMEOUT_SECONDS = 60
-KEEPALIVE_SECONDS = 15
+KEEPALIVE_SECONDS = 10
 
 # Chinook Security, pinned. The same commit is used by
 # .github/workflows/chinook.yml; a check keeps both in step.
@@ -691,7 +691,11 @@ SECURITY_HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "no-referrer",
     "X-Frame-Options": "DENY",
-    "Cache-Control": "no-store",
+    "Cache-Control": "no-store, no-transform",
+    # Asks proxies in between (GitHub's port forwarding among them) not to
+    # hold the event stream back. The app does not rely on it: when the
+    # stream stalls it polls /api/pending and thread/read instead.
+    "X-Accel-Buffering": "no",
 }
 
 
@@ -813,6 +817,9 @@ def make_handler(bridge: Bridge) -> Callable[..., BaseHTTPRequestHandler]:
                 )
             elif path == "/api/events":
                 self._events()
+            elif path == "/api/pending":
+                # For a phone whose event stream is held back by a proxy.
+                self._json(HTTPStatus.OK, {"result": bridge.app_server.pending_server_requests()})
             elif path == "/api/security":
                 self._json(HTTPStatus.OK, bridge.scanner.status())
             else:
