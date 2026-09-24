@@ -53,6 +53,10 @@ fork the repository first and use the _Start in Codespaces_ link of your fork.
 Later, stopped codespaces wake up when you open them again from
 [github.com/codespaces](https://github.com/codespaces).
 
+**Updates:** every start of the codespace fetches the newest version. To get
+one, stop the codespace (github.com/codespaces → ⋯ → _Stop codespace_) and
+open it again.
+
 ## Costs
 
 GitHub's documentation (billing for Codespaces) states: personal accounts

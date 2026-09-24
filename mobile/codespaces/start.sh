@@ -17,6 +17,19 @@ if [ -f "$state/bridge.pid" ] && kill -0 "$(cat "$state/bridge.pid")" 2>/dev/nul
   exit 0
 fi
 
+# Stay current without a terminal: on every start, fast-forward to the
+# newest main — but only on main and only if nothing was changed here.
+# Stopping and starting the codespace is then how an update arrives. A
+# failed pull (offline, diverged) keeps the version that is there.
+if [ "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] \
+  && [ -z "$(git status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+  if timeout 60 git pull --ff-only --quiet origin main; then
+    echo "Codex Mobile is up to date: $(git rev-parse --short HEAD)" > "$state/update.txt"
+  else
+    echo "Update skipped (git pull failed); running $(git rev-parse --short HEAD)" > "$state/update.txt"
+  fi
+fi
+
 # `--no-hosted-ui`: in a codespace the bridge serves the app itself, so the
 # published page on github.io need not be trusted as an origin. This is a
 # public repository; whoever starts a codespace from it should not have to
