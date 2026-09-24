@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Codex itself (agent, CLI, models)
+    url: https://github.com/openai/codex/issues
+    about: Codex Mobile does not change Codex. Its own problems go to openai/codex.
+  - name: Security vulnerability in Codex Mobile
+    url: https://github.com/Pheonix-Studio-cat/codex-mobile/security/advisories/new
+    about: Report privately. Never in a public issue.

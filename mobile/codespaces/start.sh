@@ -17,12 +17,17 @@ if [ -f "$state/bridge.pid" ] && kill -0 "$(cat "$state/bridge.pid")" 2>/dev/nul
   exit 0
 fi
 
+# `--no-hosted-ui`: in a codespace the bridge serves the app itself, so the
+# published page on github.io need not be trusted as an origin. This is a
+# public repository; whoever starts a codespace from it should not have to
+# trust anyone else's website.
 # `setsid`: a session of its own. The command that runs this script is ended
 # together with its process group once it returns; without setsid the bridge
 # went with it (reproduced by killing the group).
 setsid nohup python3 mobile/bridge/codex_mobile.py \
   --workspace "$workspace" \
   --port 8765 \
+  --no-hosted-ui \
   > "$state/bridge.log" 2>&1 &
 echo $! > "$state/bridge.pid"
 

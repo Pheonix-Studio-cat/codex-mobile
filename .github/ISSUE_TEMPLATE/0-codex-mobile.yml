@@ -1,0 +1,45 @@
+name: Codex Mobile
+description: Something about the phone/iPad app, the bridge, the codespace or the security scan.
+labels: ["codex-mobile"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository is **Codex Mobile**, a fork of openai/codex. Problems with Codex itself (the agent, the CLI, models) belong to [openai/codex](https://github.com/openai/codex/issues).
+
+        **Security problems: do not report them here.** See [SECURITY.md](https://github.com/Pheonix-Studio-cat/codex-mobile/blob/main/SECURITY.md).
+
+        Never paste your pairing token, an API key or anything from `auth.json`.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: device
+    attributes:
+      label: Device
+      options:
+        - iPhone
+        - iPad
+        - Android phone
+        - Android tablet
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does Codex run
+      options:
+        - GitHub Codespace (from this repository)
+        - Somewhere else (bridge started by hand)
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or the bridge log
+      description: In a codespace the log is `~/codex-mobile/bridge.log`. Check it for secrets before pasting.

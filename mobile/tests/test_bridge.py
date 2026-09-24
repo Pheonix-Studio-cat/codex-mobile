@@ -381,6 +381,25 @@ class CodespacesTest(unittest.TestCase):
         self.assertIn("--port 8765", start)
 
 
+class PublicForkTest(unittest.TestCase):
+    def test_fork_upkeep_keeps_exactly_the_codex_mobile_workflows(self):
+        # A workflow missing from KEEP would be switched off on the next run;
+        # a name in KEEP without a file would keep nothing.
+        text = (REPO / ".github/workflows/fork-upkeep.yml").read_text()
+        keep = set(re.findall(r'"([a-z-]+\.yml)"', re.search(r"KEEP = \{([^}]*)\}", text).group(1)))
+        ours = {"chinook.yml", "mobile.yml", "mobile-pages.yml", "fork-upkeep.yml"}
+        self.assertEqual(keep, ours)
+        for name in ours:
+            self.assertTrue((REPO / ".github/workflows" / name).is_file(), name)
+
+    def test_the_codespace_does_not_trust_the_published_page(self):
+        self.assertIn("--no-hosted-ui", (REPO / "mobile/codespaces/start.sh").read_text())
+
+    def test_security_reports_go_to_this_repository_first(self):
+        text = (REPO / "SECURITY.md").read_text()
+        self.assertLess(text.index("codex-mobile/security/advisories/new"), text.index("bugcrowd"))
+
+
 class SecurityScanTest(unittest.TestCase):
     def test_exit_code_2_is_unproven_not_clean(self):
         outcome = bridge_module.classify_bot_run(
