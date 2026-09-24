@@ -276,6 +276,20 @@
     <div id="approvals" class="approvals" aria-live="assertive"></div>
 
     <footer id="composer-bar" class="composer-bar" hidden>
+      <div class="composer-tools">
+        <button
+          id="model-button"
+          type="button"
+          class="model-chip"
+          aria-haspopup="dialog"
+          aria-controls="model-sheet"
+        >
+          <span id="model-label">Model</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 10l5 5 5-5" />
+          </svg>
+        </button>
+      </div>
       <form id="composer" class="composer">
         <textarea
           id="prompt"
@@ -306,6 +320,32 @@
         ⌘↩ send · ⌘. stop · ⌘K new thread · esc close list
       </p>
     </footer>
+
+    <!-- Model and thinking level: from Codex's own model list -->
+    <div
+      id="model-sheet"
+      class="sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="model-sheet-title"
+      hidden
+    >
+      <div class="sheet-panel">
+        <div class="sheet-head">
+          <h2 id="model-sheet-title">Model</h2>
+          <button id="model-close" type="button" class="ghost small">
+            Done
+          </button>
+        </div>
+        <p id="model-note" class="muted small">
+          Applies from your next message in this thread.
+        </p>
+        <ul id="model-list" class="model-list" role="listbox"></ul>
+        <h3 class="sheet-sub">Thinking</h3>
+        <div id="effort-list" class="effort-list" role="radiogroup"></div>
+        <p id="effort-help" class="muted small"></p>
+      </div>
+    </div>
 
     <div id="toast" class="toast" role="status" hidden></div>
   </body>

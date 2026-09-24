@@ -10,6 +10,7 @@
   const TOKEN_KEY = "codex-mobile.token";
   const BRIDGE_KEY = "codex-mobile.bridge";
   const THREAD_KEY = "codex-mobile.thread";
+  const MODEL_KEY = "codex-mobile.model";
 
   const $ = (id) => document.getElementById(id);
 
@@ -33,6 +34,14 @@
     view: null,
     streamAbort: null,
     streamConnected: false,
+    // Model and thinking level. `models` comes from Codex (model/list), so
+    // the choice is exactly what the signed-in account offers. `chosen` is
+    // set once the user picks something; only then are model and effort sent
+    // with a turn — otherwise Codex's own defaults apply.
+    models: [],
+    model: null,
+    effort: null,
+    chosen: false,
     lastStreamByte: 0,
     security: null,
   };
@@ -678,6 +687,7 @@
       const result = await rpc("thread/resume", { threadId: threadId });
       state.threadId = result.thread.id;
       remember(THREAD_KEY, state.threadId);
+      adoptThreadModel(result.model, result.reasoningEffort);
       renderThread(result.thread);
       renderThreadList();
     } catch (error) {
@@ -688,6 +698,7 @@
 
   function newThreadView() {
     state.threadId = null;
+    applyPreferredModel();
     state.threadCwd = "";
     forget(THREAD_KEY);
     clearConversation();
@@ -738,7 +749,15 @@
 
     try {
       if (!state.threadId) {
-        const started = await rpc("thread/start", {});
+        const started = await rpc(
+          "thread/start",
+          state.chosen && state.model ? { model: state.model } : {},
+        );
+        // A choice made before the thread existed stays in force for its
+        // first turn; only without one does the thread's own model show.
+        if (!state.chosen)
+          adoptThreadModel(started.model, started.reasoningEffort);
+
         state.threadId = started.thread.id;
         state.threadCwd = started.thread.cwd || started.cwd || state.workspace;
         remember(THREAD_KEY, state.threadId);
@@ -754,11 +773,15 @@
           clientUserMessageId: clientId,
         });
       } else {
-        const result = await rpc("turn/start", {
+        const params = {
           threadId: state.threadId,
           input: input,
           clientUserMessageId: clientId,
-        });
+        };
+        // "Override the model for this turn and subsequent turns" (protocol).
+        if (state.chosen && state.model) params.model = state.model;
+        if (state.chosen && state.effort) params.effort = state.effort;
+        const result = await rpc("turn/start", params);
         if (result && result.turn) setActiveTurn(result.turn.id);
       }
     } catch (error) {
@@ -779,6 +802,164 @@
     } catch (error) {
       toast("Could not stop: " + error.message);
     }
+  }
+
+  // ------------------------------------------------------------------
+  // Model and thinking level
+  // ------------------------------------------------------------------
+
+  async function loadModels() {
+    try {
+      const result = await rpc("model/list", {});
+      state.models = (result.data || []).filter((model) => !model.hidden);
+    } catch (_) {
+      state.models = [];
+    }
+    if (!state.threadId) applyPreferredModel();
+    renderModelLabel();
+  }
+
+  function findModel(id) {
+    return state.models.find((model) => model.id === id || model.model === id);
+  }
+
+  function preferredModel() {
+    try {
+      const saved = JSON.parse(recall(MODEL_KEY) || "null");
+      if (saved && findModel(saved.model)) return saved;
+    } catch (_) {
+      /* ignore a broken entry */
+    }
+    return null;
+  }
+
+  // A new thread starts with the last model chosen on this device, else
+  // with Codex's default.
+  function applyPreferredModel() {
+    const saved = preferredModel();
+    if (saved) {
+      state.model = saved.model;
+      state.effort = saved.effort;
+      state.chosen = true;
+    } else {
+      const fallback = state.models.find((model) => model.isDefault) || null;
+      state.model = fallback ? fallback.id : null;
+      state.effort = fallback ? fallback.defaultReasoningEffort : null;
+      state.chosen = false;
+    }
+    renderModelLabel();
+  }
+
+  // An existing thread keeps the model Codex reports for it.
+  function adoptThreadModel(model, effort) {
+    if (model) state.model = model;
+    if (effort) state.effort = effort;
+    state.chosen = false;
+    renderModelLabel();
+  }
+
+  function renderModelLabel() {
+    const model = findModel(state.model);
+    const name = model ? model.displayName : state.model || "Model";
+    $("model-label").textContent = state.effort
+      ? name + " · " + state.effort
+      : name;
+  }
+
+  function openModelSheet() {
+    if (!state.models.length) loadModels();
+    renderModelSheet();
+    $("model-note").textContent = state.activeTurnId
+      ? "Codex is working. The change applies from your next message."
+      : "Applies from your next message in this thread.";
+    $("model-sheet").hidden = false;
+    const selected = document.querySelector(
+      '#model-list [aria-selected="true"]',
+    );
+    (selected || $("model-close")).focus();
+  }
+
+  function closeModelSheet() {
+    $("model-sheet").hidden = true;
+    $("model-button").focus();
+  }
+
+  function renderModelSheet() {
+    const list = $("model-list");
+    list.textContent = "";
+    if (!state.models.length) {
+      const empty = document.createElement("li");
+      empty.className = "muted small";
+      empty.textContent = "Codex did not return a model list.";
+      list.appendChild(empty);
+    }
+    state.models.forEach((model) => {
+      const li = document.createElement("li");
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "option");
+      button.setAttribute(
+        "aria-selected",
+        String(model.id === state.model || model.model === state.model),
+      );
+      const name = document.createElement("span");
+      name.className = "model-name";
+      name.textContent =
+        model.displayName + (model.isDefault ? " (default)" : "");
+      button.appendChild(name);
+      if (model.description) {
+        const desc = document.createElement("span");
+        desc.className = "model-desc";
+        desc.textContent = model.description;
+        button.appendChild(desc);
+      }
+      button.addEventListener("click", () => chooseModel(model.id, null));
+      li.appendChild(button);
+      list.appendChild(li);
+    });
+
+    const efforts = $("effort-list");
+    efforts.textContent = "";
+    const model = findModel(state.model);
+    const options = model ? model.supportedReasoningEfforts || [] : [];
+    options.forEach((option) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.setAttribute("role", "radio");
+      button.setAttribute(
+        "aria-checked",
+        String(option.reasoningEffort === state.effort),
+      );
+      button.textContent = option.reasoningEffort;
+      button.addEventListener("click", () =>
+        chooseModel(state.model, option.reasoningEffort),
+      );
+      efforts.appendChild(button);
+    });
+    const current = options.find(
+      (option) => option.reasoningEffort === state.effort,
+    );
+    $("effort-help").textContent = current ? current.description : "";
+  }
+
+  function chooseModel(id, effort) {
+    const model = findModel(id);
+    if (!model) return;
+    const supported = (model.supportedReasoningEfforts || []).map(
+      (option) => option.reasoningEffort,
+    );
+    let next = effort || state.effort;
+    // Keep the level when the new model has it; otherwise its default.
+    if (!supported.includes(next)) next = model.defaultReasoningEffort;
+    state.model = model.id;
+    state.effort = next;
+    state.chosen = true;
+    remember(
+      MODEL_KEY,
+      JSON.stringify({ model: state.model, effort: state.effort }),
+    );
+    renderModelLabel();
+    renderModelSheet();
   }
 
   // ------------------------------------------------------------------
@@ -1015,7 +1196,10 @@
     $("login-device").hidden = false;
     if (params.success) {
       toast("Signed in.");
-      refreshAccount().then(loadThreads);
+      refreshAccount().then(() => {
+        loadModels();
+        loadThreads();
+      });
     } else {
       showError("login-error", params.error || "The sign-in did not complete.");
     }
@@ -1438,6 +1622,7 @@
     connectEvents();
     const signedIn = await refreshAccount();
     if (!signedIn) return;
+    await loadModels();
     await loadThreads();
     const last = recall(THREAD_KEY);
     if (last && state.threads.some((thread) => thread.id === last))
@@ -1469,6 +1654,11 @@
   // own (status bar, sidebar).
   function onShortcut(event) {
     const mod = event.metaKey || event.ctrlKey;
+    if (event.key === "Escape" && !$("model-sheet").hidden) {
+      closeModelSheet();
+      event.preventDefault();
+      return;
+    }
     if (event.key === "Escape") {
       if (!$("drawer").hidden && !wideLayout.matches) {
         closeDrawer();
@@ -1566,6 +1756,11 @@
       send(text);
     });
     $("stop").addEventListener("click", interrupt);
+    $("model-button").addEventListener("click", openModelSheet);
+    $("model-close").addEventListener("click", closeModelSheet);
+    $("model-sheet").addEventListener("click", (event) => {
+      if (event.target === $("model-sheet")) closeModelSheet();
+    });
     $("sec-run").addEventListener("click", runScan);
 
     wideLayout.addEventListener("change", updateDrawerForLayout);
