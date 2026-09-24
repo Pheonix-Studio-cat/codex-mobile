@@ -357,9 +357,19 @@ class CodespacesTest(unittest.TestCase):
     def test_the_token_comes_from_the_codespaces_secret(self):
         self.assertEqual(bridge_module.read_token(None, {"CODEX_MOBILE_TOKEN": " " + "t" * 30 + "\n"}), "t" * 30)
 
-    def test_a_short_secret_is_refused_not_used(self):
+    def test_a_short_secret_is_not_used_but_does_not_stop_the_bridge(self):
+        # In a codespace an error at start means "no bridge", silently.
+        token, source = bridge_module.token_and_source(None, {"CODEX_MOBILE_TOKEN": "short"})
+        self.assertEqual(source, "generated")
+        self.assertNotEqual(token, "short")
+        self.assertGreaterEqual(len(token), 40)
+
+    def test_a_short_token_file_still_stops_the_bridge(self):
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as handle:
+            handle.write("short")
         with self.assertRaises(SystemExit):
-            bridge_module.read_token(None, {"CODEX_MOBILE_TOKEN": "short"})
+            bridge_module.token_and_source(handle.name, {})
+        os.unlink(handle.name)
 
     def test_without_a_secret_a_strong_token_is_generated(self):
         first = bridge_module.read_token(None, {})

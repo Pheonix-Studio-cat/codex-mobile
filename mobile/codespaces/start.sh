@@ -43,7 +43,7 @@ umask 077
 {
   echo ""
   echo "Codex Mobile"
-  grep -E "Open on your phone|Pairing token" "$state/bridge.log" || echo "  (the bridge did not start; see $state/bridge.log)"
+  grep -E "Open on your phone|Pairing token|shorter than" "$state/bridge.log" || echo "  (the bridge did not start; see $state/bridge.log)"
   echo ""
 } > "$state/link.txt"
 cat "$state/link.txt"

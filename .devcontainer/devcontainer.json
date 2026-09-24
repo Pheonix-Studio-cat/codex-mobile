@@ -3,10 +3,11 @@
 // Setup and background: mobile/README.md.
 {
   "name": "Codex Mobile",
-  "image": "mcr.microsoft.com/devcontainers/python:3.12-bookworm",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
-  },
+  // Node 22, Python 3 and setsid in one image, no features: nothing is
+  // fetched from ghcr.io at start, one thing less that can fail. When the
+  // build fails, Codespaces starts a recovery container without these
+  // scripts — and then there is no bridge at all.
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
   // The smallest machine: the free quota counts core hours, and the bridge
   // and Codex need little.
   "hostRequirements": { "cpus": 2 },

@@ -96,5 +96,19 @@ Two things a codespace could do to the app are reproduced in tests:
   (`tests/e2e/buffering_proxy.py`; with the polling switched off, that test
   fails).
 
-**Not covered by any test:** a real codespace (GitHub's port forwarding, the
-secret, the scripts on GitHub's image) and a real Codex sign-in.
+The codespace itself was built with the official Dev Container CLI
+(`devcontainer up`, the same lifecycle Codespaces runs): setup installed Codex
+and Chinook Security, the start script left the bridge running in its own
+session, Codex was ready and the app answered.
+
+**Not covered by any test:** GitHub's port forwarding in a real codespace,
+and a real Codex sign-in.
+
+## Models
+
+The model chip above the message field lists what Codex's `model/list`
+returns — the models the signed-in account offers, with their thinking
+levels. The choice is sent with the next turn (`model`, `effort`) and stays
+for the thread; new threads start with the last choice on the device. The
+end-to-end test checks that every request of the turn names the chosen model
+and level.

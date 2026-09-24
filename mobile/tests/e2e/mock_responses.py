@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -54,7 +55,9 @@ def shell_call(tools):
         return "exec_command", {"cmd": command, **escalate}
     if "shell" in names:
         return "shell", {"command": ["bash", "-lc", command], **escalate}
-    raise RuntimeError(f"no shell tool offered: {sorted(n for n in names if n)}")
+    # Some models are offered without tools (observed: gpt-6-luna in Codex
+    # 0.156.1). Then there is nothing to call; the turn is answered directly.
+    return None, None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -84,14 +87,31 @@ class Handler(BaseHTTPRequestHandler):
         with Handler.lock:
             Handler.requests_seen += 1
             number = Handler.requests_seen
+            # What Codex asked for: the test checks that a model chosen on the
+            # phone is the model the request names.
+            log = os.environ.get("MOCK_REQUEST_LOG")
+            if log:
+                with open(log, "a", encoding="utf-8") as handle:
+                    handle.write(
+                        json.dumps(
+                            {
+                                "model": request.get("model"),
+                                "reasoning": request.get("reasoning"),
+                                "tools": sorted(
+                                    t.get("name") or t.get("type") for t in request.get("tools") or [] if isinstance(t, dict)
+                                ),
+                            }
+                        )
+                        + "\n"
+                    )
         items = request.get("input") or []
         has_tool_output = any(
             isinstance(item, dict) and item.get("type") in ("function_call_output", "custom_tool_call_output")
             for item in items
         )
         response_id = f"resp-{number}"
-        if not has_tool_output:
-            name, arguments = shell_call(request.get("tools") or [])
+        name, arguments = (None, None) if has_tool_output else shell_call(request.get("tools") or [])
+        if name is not None:
             events = [
                 {"type": "response.created", "response": {"id": response_id}},
                 {

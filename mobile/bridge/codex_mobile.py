@@ -952,17 +952,30 @@ def read_token(path: Optional[str], env: Optional[dict] = None) -> str:
     """The pairing token: from --token-file, else from $CODEX_MOBILE_TOKEN (a
     Codespaces secret the owner sets once in the GitHub settings, so no
     terminal is ever needed), else a fresh random one."""
+    return token_and_source(path, env)[0]
+
+
+def token_and_source(path: Optional[str], env: Optional[dict] = None) -> "tuple[str, str]":
+    """(token, source) with source "file", "secret" or "generated".
+
+    A --token-file that is too short stops the bridge: it was given
+    explicitly. A secret that is too short does not: in a codespace nobody
+    would see the error, and there would simply be no bridge to connect to.
+    The bridge then generates a token, says why in its log and in the
+    pairing link it writes, and the owner can pair with that link.
+    """
     env = os.environ if env is None else env
-    token = ""
     if path:
         token = Path(path).read_text(encoding="utf-8").strip()
-    elif env.get(TOKEN_ENV):
-        token = env[TOKEN_ENV].strip()
-    else:
-        return secrets.token_urlsafe(32)
-    if len(token) < 24:
-        raise SystemExit("the pairing token must be at least 24 characters long")
-    return token
+        if len(token) < 24:
+            raise SystemExit("the pairing token must be at least 24 characters long")
+        return token, "file"
+    secret = (env.get(TOKEN_ENV) or "").strip()
+    if secret and len(secret) >= 24:
+        return secret, "secret"
+    if secret:
+        log(f"{TOKEN_ENV} is shorter than 24 characters and is ignored; using a generated token")
+    return secrets.token_urlsafe(32), "generated"
 
 
 def codespace_url(port: int, env: Optional[dict] = None) -> str:
@@ -990,7 +1003,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         if args.fetch_chinook_only:
             return 0
 
-    token = read_token(args.token_file)
+    token, token_source = token_and_source(args.token_file)
     hub = EventHub()
     app_server = AppServer([args.codex, "app-server"], hub)
     chinook_dir = resolve_chinook(args.chinook)
@@ -1020,7 +1033,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     # A token the owner chose (secret or file) is never printed: logs are
     # kept, and the owner knows it already. Only a generated one is shown,
     # because otherwise nobody could pair.
-    token_known = bool(args.token_file or os.environ.get(TOKEN_ENV))
+    token_known = token_source != "generated"
     fragment = "" if token_known else f"#token={token}"
     if forwarded:
         print(f"  Open on your phone:  {forwarded}/{fragment}", file=sys.stderr)
@@ -1032,6 +1045,8 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"  Hosted app:          {HOSTED_UI_URL}#bridge={bridge_url}{joiner}{fragment[1:]}", file=sys.stderr)
     if token_known:
         print(f"  Pairing token:       the one you set ({'--token-file' if args.token_file else TOKEN_ENV})", file=sys.stderr)
+    elif os.environ.get(TOKEN_ENV):
+        print(f"  Pairing token:       generated — {TOKEN_ENV} is shorter than 24 characters", file=sys.stderr)
     else:
         print("  The part after # carries the token. It never reaches any server.", file=sys.stderr)
     print(f"  Workspace:           {workspace}", file=sys.stderr)

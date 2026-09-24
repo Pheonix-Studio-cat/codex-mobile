@@ -120,7 +120,10 @@ async function shot(page, name) {
 async function main() {
   const root = mkdtempSync(join(tmpdir(), "codex-mobile-e2e-"));
   const portFile = join(root, "mock-port");
-  start("python3", [mockScript, "--port-file", portFile]);
+  const requestLog = join(root, "model-requests.jsonl");
+  start("python3", [mockScript, "--port-file", portFile], {
+    env: { ...process.env, MOCK_REQUEST_LOG: requestLog },
+  });
   await waitFor(
     () => existsSync(portFile) && readFileSync(portFile, "utf8").length > 0,
     "mock model",
@@ -426,6 +429,115 @@ async function main() {
       "the published page offers to start a codespace",
     );
     await stranger.close();
+
+    // Switching the model on the phone reaches the model: the scripted
+    // model logs what Codex asks for, and every request of the next turn
+    // must name the chosen model and thinking level.
+    const picker = await context.newPage();
+    lastPage = picker;
+    await picker.goto(one.url);
+    await picker.waitForSelector("#view-chat:not([hidden])", {
+      timeout: 30000,
+    });
+    await picker.evaluate(() =>
+      document.getElementById("new-thread-button").click(),
+    );
+    await picker.waitForFunction(
+      () =>
+        document.getElementById("model-label").textContent.trim() !== "Model",
+      null,
+      { timeout: 30000 },
+    );
+    await picker.tap("#model-button");
+    await picker.waitForSelector("#model-sheet:not([hidden])");
+    const names = (
+      await picker.locator("#model-list .model-name").allTextContents()
+    ).map((n) => n.replace(" (default)", ""));
+    check(
+      names.length > 1,
+      "the model list comes from Codex: " + names.join(", "),
+    );
+    const target =
+      names.find((n) => /luna/i.test(n)) ||
+      names.find((n) => !/astra/i.test(n)) ||
+      names[0];
+    await picker
+      .locator("#model-list button", { hasText: target })
+      .first()
+      .tap();
+    const efforts = await picker
+      .locator("#effort-list button")
+      .allTextContents();
+    const effort = efforts.includes("high")
+      ? "high"
+      : efforts[efforts.length - 1];
+    await picker
+      .locator("#effort-list button", {
+        hasText: new RegExp("^" + effort + "$"),
+      })
+      .tap();
+    await shot(picker, "10-model-sheet");
+    await picker.tap("#model-close");
+    const chosenLabel = await picker.textContent("#model-label");
+    check(
+      chosenLabel.includes(target) && chosenLabel.includes(effort),
+      "the chip shows the choice: " + chosenLabel.trim(),
+    );
+    const before = existsSync(requestLog)
+      ? readFileSync(requestLog, "utf8").trim().split("\n").length
+      : 0;
+    await picker.fill("#prompt", "Now with another model.");
+    await picker.tap("#send");
+    // Whether this model is offered tools (and so asks for approval) is
+    // Codex's business; the answer arrives either way.
+    await picker.waitForFunction(
+      () =>
+        document.querySelector(".approval") ||
+        Array.from(document.querySelectorAll(".msg.agent")).some((el) =>
+          /step two/.test(el.textContent),
+        ),
+      null,
+      { timeout: 30000 },
+    );
+    if (await picker.isVisible(".approval"))
+      await picker.tap(".approval button.primary");
+    await picker.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll(".msg.agent")).some((el) =>
+          /step two/.test(el.textContent),
+        ),
+      null,
+      { timeout: 30000 },
+    );
+    const sent = readFileSync(requestLog, "utf8")
+      .trim()
+      .split("\n")
+      .slice(before)
+      .map((line) => JSON.parse(line));
+    check(
+      sent.length >= 1,
+      "the turn made " + sent.length + " model request(s)",
+    );
+    check(
+      sent.every((r) => String(r.model).toLowerCase() === target.toLowerCase()),
+      "every request names the chosen model: " +
+        sent.map((r) => r.model).join(", "),
+    );
+    check(
+      sent.every((r) => r.reasoning && r.reasoning.effort === effort),
+      "every request carries the chosen thinking level: " +
+        sent.map((r) => r.reasoning && r.reasoning.effort).join(", "),
+    );
+    // Reloaded, the thread still shows its model — reported by Codex.
+    await picker.reload();
+    await picker.waitForFunction(
+      (name) =>
+        document.getElementById("model-label").textContent.includes(name),
+      target,
+      { timeout: 30000 },
+    );
+    check(true, "after a reload the thread still shows " + target);
+    await picker.close();
 
     // iPad: landscape keeps the thread list open, portrait centres one
     // column and slides the list in; a hardware keyboard sends with Enter.
