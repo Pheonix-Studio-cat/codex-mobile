@@ -320,6 +320,9 @@ async function main() {
       );
       await shot(page, "05-security");
     } else {
+      await page.waitForFunction(
+        () => document.getElementById("sec-version").textContent.trim() !== "",
+      );
       const version = await page.textContent("#sec-version");
       check(/not installed/.test(version), "without Chinook the view says so");
       check(
@@ -367,6 +370,43 @@ async function main() {
     );
     await shot(hosted, "08-hosted");
     await hosted.close();
+
+    // A proxy that holds the event stream back entirely: the app must notice
+    // and poll, so that approvals and answers still arrive.
+    const proxyPort = 18960;
+    start("python3", [
+      resolve(here, "buffering_proxy.py"),
+      String(proxyPort),
+      "18901",
+    ]);
+    await waitFor(async () => {
+      try {
+        return (await fetch(`http://127.0.0.1:${proxyPort}/api/health`)).ok;
+      } catch {
+        return false;
+      }
+    }, "buffering proxy");
+    const held = await context.newPage();
+    await held.goto(`http://127.0.0.1:${proxyPort}/#token=${one.token}`);
+    await held.waitForSelector("#view-chat:not([hidden])", { timeout: 30000 });
+    await held.evaluate(() =>
+      document.getElementById("new-thread-button").click(),
+    );
+    await held.fill("#prompt", "Through a proxy that holds the stream.");
+    await held.tap("#send");
+    await held.waitForSelector(".approval", { timeout: 90000 });
+    check(true, "held stream: the approval still arrives (by polling)");
+    await held.tap(".approval button.primary");
+    await held.waitForFunction(
+      () =>
+        Array.from(document.querySelectorAll(".msg.agent")).some((el) =>
+          /step two/.test(el.textContent),
+        ),
+      null,
+      { timeout: 90000 },
+    );
+    check(true, "held stream: the answer still arrives (by polling)");
+    await held.close();
 
     // An origin the bridge does not list cannot use it, even with the token.
     const stranger = await context.newPage();

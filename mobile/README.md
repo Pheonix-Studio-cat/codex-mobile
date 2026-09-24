@@ -87,7 +87,14 @@ and iPad sized browsers against a real `codex app-server` with a scripted
 model. The [`Codex Mobile`](../.github/workflows/mobile.yml) workflow runs
 all three.
 
+Two things a codespace could do to the app are reproduced in tests:
+
+- **The start command's process group is ended** after it returns — the
+  bridge runs in a session of its own (`setsid`) and survives it.
+- **A proxy holds the event stream back** — the app notices the silent
+  stream after 25 seconds and polls for approvals and the thread instead
+  (`tests/e2e/buffering_proxy.py`; with the polling switched off, that test
+  fails).
+
 **Not covered by any test:** a real codespace (GitHub's port forwarding, the
-secret, the scripts on GitHub's image) and a real Codex sign-in. The
-codespace path was checked with the same environment variables in a
-container, not in Codespaces.
+secret, the scripts on GitHub's image) and a real Codex sign-in.

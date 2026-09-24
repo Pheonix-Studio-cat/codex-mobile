@@ -258,6 +258,26 @@ class BridgeTest(unittest.TestCase):
         self.assertIn("error", json.loads(body))
         self.assertEqual(len([m for m in self.received() if m.get("id") == 0 and "result" in m]), 1)
 
+    def test_open_approvals_can_be_polled_when_the_stream_is_held_back(self):
+        status, _, _ = self.client.request("/api/pending", token=None)
+        self.assertEqual(status, 401)
+        self.client.rpc("turn/start", {"threadId": "thread-1", "input": []})
+        deadline = time.time() + 5
+        pending = []
+        while time.time() < deadline and not pending:
+            _, _, body = self.client.request("/api/pending")
+            pending = json.loads(body)["result"]
+            time.sleep(0.05)
+        self.assertEqual([m["method"] for m in pending], ["item/commandExecution/requestApproval"])
+        self.client.request("/api/respond", {"id": 0, "result": {"decision": "accept"}})
+        _, _, body = self.client.request("/api/pending")
+        self.assertEqual(json.loads(body)["result"], [])
+
+    def test_the_event_stream_asks_proxies_not_to_buffer(self):
+        _, headers, _ = self.client.request("/api/health", token=None)
+        self.assertEqual(headers.get("X-Accel-Buffering"), "no")
+        self.assertIn("no-transform", headers.get("Cache-Control", ""))
+
     def test_a_phone_that_connects_later_still_sees_open_approvals(self):
         first = self.events()
         self.client.rpc("turn/start", {"threadId": "thread-1", "input": []})
